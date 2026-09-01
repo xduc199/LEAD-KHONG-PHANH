@@ -3,156 +3,1012 @@ using UnityEngine;
 
 public class RoadManager : MonoBehaviour
 {
+    //=========================================================
+    // ROAD
+    //=========================================================
+
     [Header("Road Settings")]
     [SerializeField] private GameObject roadPrefab;
-    [SerializeField] private float chunkLength = 30f;
-    [SerializeField] private int numberOfChunks = 5;
+    [SerializeField] private float chunkLength = 20f;
+    [SerializeField] private int numberOfChunks = 7;
 
-    [Header("Spawn Prefabs")]
-    [SerializeField] private GameObject baGacRampPrefab;      // Xe ba gác cùng chiều (+Z)
-    [SerializeField] private GameObject oncomingCarPrefab;    // Xe ngược chiều (-Z)
-    [SerializeField] private GameObject coinPrefab;
-    [SerializeField] private float laneDistance = 2.4f;
 
-    [Header("Traffic Density & Ratios")]
-    [SerializeField] [Range(0.5f, 1f)] private float spawnChance = 0.85f;     // Tỷ lệ xuất hiện xe mỗi vị trí
-    [SerializeField] [Range(0.05f, 0.3f)] private float baGacRatio = 0.15f;   // 0.15 = Chỉ 15% xe sinh ra là Xe Ba Gác
-    [SerializeField] private float baGacMinDistance = 70f;                   // Phải đi xa ít nhất 70m mới có Xe Ba Gác tiếp theo
+    //=========================================================
+    // TRAFFIC PREFABS
+    //=========================================================
 
-    [Header("Safety & Separation Controls")]
-    [SerializeField] private float minVehicleZGap = 15f;                     // Giãn cách xe ngược chiều bình thường
-    [SerializeField] private float baGacSafeGap = 45f;                       // Giãn cách an toàn khóa làn sau khi sinh Ba Gác
+    [Header("Traffic Prefabs")]
+    [SerializeField] private GameObject carPrefab;
+    [SerializeField] private GameObject motorcyclePrefab;
+    [SerializeField] private GameObject busPrefab;
+    [SerializeField] private GameObject baGacPrefab;
 
-    [Header("Player Tracking")]
+
+    //=========================================================
+    // COIN SPAWNER
+    //=========================================================
+
+    [Header("Coin Spawner")]
+    [Tooltip(
+        "CoinSpawner chịu trách nhiệm hoàn toàn việc sinh Coin. " +
+        "RoadManager chỉ gửi lane và vị trí traffic."
+    )]
+    [SerializeField] private CoinSpawner coinSpawner;
+
+
+    //=========================================================
+    // LANES
+    //=========================================================
+
+    [Header("Lane Positions")]
+    [SerializeField] private float leftLaneX = -5f;
+    [SerializeField] private float centerLaneX = 0f;
+    [SerializeField] private float rightLaneX = 5f;
+
+
+    //=========================================================
+    // TRAFFIC DENSITY
+    //=========================================================
+
+    [Header("Traffic Density")]
+    [SerializeField] private int minTrafficPerChunk = 1;
+    [SerializeField] private int maxTrafficPerChunk = 1;
+
+    [Tooltip("Khoảng cách tối thiểu giữa traffic.")]
+    [SerializeField] private float minimumTrafficGap = 14f;
+
+
+    //=========================================================
+    // LANE BALANCE
+    //=========================================================
+
+    [Header("Lane Balance")]
+    [SerializeField] private bool balancedLaneSpawn = true;
+
+
+    //=========================================================
+    // PLAYER
+    //=========================================================
+
+    [Header("Player")]
     [SerializeField] private Transform playerTransform;
 
-    private List<GameObject> activeRoads = new List<GameObject>();
-    private float spawnZ = 0f;
 
-    // Quản lý thời gian/vị trí spawn theo làn
-    private float[] lastLaneSpawnZ = new float[3] { -999f, -999f, -999f };
-    private bool[] lastLaneWasBaGac = new bool[3] { false, false, false };
-    private float lastGlobalBaGacZ = -999f;
+    //=========================================================
+    // HEIGHT
+    //=========================================================
+
+    [Header("Traffic Spawn Height")]
+    [SerializeField] private float trafficSpawnY = 0.8f;
+
+
+    //=========================================================
+    // SPAWN
+    //=========================================================
+
+    [Header("Spawn Settings")]
+    [SerializeField] private float spawnEdgePadding = 6f;
+
+
+    //=========================================================
+    // VEHICLE PROBABILITY
+    //=========================================================
+
+    [Header("Vehicle Probability")]
+
+    [Range(0f, 1f)]
+    [SerializeField] private float carProbability = 0.45f;
+
+    [Range(0f, 1f)]
+    [SerializeField] private float motorcycleProbability = 0.30f;
+
+    [Range(0f, 1f)]
+    [SerializeField] private float busProbability = 0.10f;
+
+    [Range(0f, 1f)]
+    [SerializeField] private float baGacProbability = 0.15f;
+
+
+    //=========================================================
+    // SPEED
+    //=========================================================
+
+    [Header("Traffic Speed")]
+    [SerializeField] private float minimumTrafficSpeed = 7f;
+    [SerializeField] private float maximumTrafficSpeed = 13f;
+
+
+    //=========================================================
+    // DEBUG
+    //=========================================================
+
+    [Header("Debug")]
+    [SerializeField] private bool debugLogs = false;
+
+
+    //=========================================================
+    // INTERNAL
+    //=========================================================
+
+    private readonly List<GameObject> activeRoads =
+        new List<GameObject>();
+
+    private readonly List<TrafficCarBehavior> activeTraffic =
+        new List<TrafficCarBehavior>();
+
+    private float spawnZ;
+
+
+    //=========================================================
+    // LANE CURSOR
+    //=========================================================
+
+    /*
+     * 0 = LEFT
+     * 1 = CENTER
+     * 2 = RIGHT
+     *
+     * LEFT -> CENTER -> RIGHT -> LEFT
+     */
+
+    private int nextLaneIndex = 0;
+
+
+    //=========================================================
+    // START
+    //=========================================================
 
     private void Start()
     {
+        FindPlayer();
+
+        FindCoinSpawner();
+
+        if (playerTransform != null)
+        {
+            spawnZ =
+                playerTransform.position.z -
+                chunkLength;
+        }
+        else
+        {
+            spawnZ = 0f;
+        }
+
         for (int i = 0; i < numberOfChunks; i++)
         {
-            SpawnRoad(i >= 1);
+            SpawnRoad();
         }
     }
+
+
+    //=========================================================
+    // UPDATE
+    //=========================================================
 
     private void Update()
     {
-        if (playerTransform != null && playerTransform.position.z > (activeRoads[0].transform.position.z + chunkLength))
+        CleanupTraffic();
+
+        if (playerTransform == null)
         {
-            SpawnRoad(true);
-            DeleteRoad();
+            FindPlayer();
+
+            if (playerTransform == null)
+                return;
+        }
+
+        if (activeRoads.Count == 0)
+            return;
+
+        float playerZ =
+            playerTransform.position.z;
+
+        while (
+            playerZ >
+            activeRoads[0].transform.position.z +
+            chunkLength
+        )
+        {
+            SpawnRoad();
+            DeleteOldestRoad();
         }
     }
 
-    private void SpawnRoad(bool allowSpawnObjects)
+
+    //=========================================================
+    // FIND PLAYER
+    //=========================================================
+
+    private void FindPlayer()
     {
-        GameObject newRoad = Instantiate(roadPrefab, new Vector3(0, 0, spawnZ), Quaternion.identity);
-        newRoad.transform.SetParent(transform);
-        activeRoads.Add(newRoad);
+        if (playerTransform != null)
+            return;
 
-        if (allowSpawnObjects)
+        GameObject player =
+            GameObject.FindGameObjectWithTag("Player");
+
+        if (player != null)
         {
-            // Chia mỗi đoạn 30m thành 2 điểm kiểm tra spawn (mốc +6m và +20m)
-            float[] subOffsets = new float[] { 6f, 20f };
-
-            foreach (float offsetZ in subOffsets)
-            {
-                float currentSubZ = spawnZ + offsetZ;
-
-                if (Random.value <= spawnChance)
-                {
-                    TrySpawnTrafficRow(currentSubSubZ: currentSubZ);
-                }
-            }
+            playerTransform =
+                player.transform;
         }
+    }
+
+
+    //=========================================================
+    // FIND COIN SPAWNER
+    //=========================================================
+
+    private void FindCoinSpawner()
+    {
+        if (coinSpawner != null)
+            return;
+
+        coinSpawner =
+            FindFirstObjectByType<CoinSpawner>();
+
+        if (coinSpawner == null)
+        {
+            Debug.LogWarning(
+                "[RoadManager] Không tìm thấy CoinSpawner. " +
+                "Traffic vẫn spawn bình thường nhưng Coin sẽ không được spawn."
+            );
+        }
+    }
+
+
+    //=========================================================
+    // SPAWN ROAD
+    //=========================================================
+
+    private void SpawnRoad()
+    {
+        if (roadPrefab == null)
+        {
+            Debug.LogError(
+                "[RoadManager] Road Prefab chưa được gán."
+            );
+
+            return;
+        }
+
+        GameObject road =
+            Instantiate(
+                roadPrefab,
+                new Vector3(
+                    0f,
+                    0f,
+                    spawnZ
+                ),
+                Quaternion.identity
+            );
+
+        activeRoads.Add(road);
+
+        SpawnTrafficForChunk(spawnZ);
 
         spawnZ += chunkLength;
     }
 
-    private void TrySpawnTrafficRow(float currentSubSubZ)
+
+    //=========================================================
+    // SPAWN TRAFFIC FOR CHUNK
+    //=========================================================
+
+    private void SpawnTrafficForChunk(
+        float chunkStartZ
+    )
     {
-        int trafficLane = Random.Range(0, 3); // 0: Trái, 1: Giữa, 2: Phải
-        float trafficX = (trafficLane - 1) * laneDistance;
+        int min =
+            Mathf.Max(
+                0,
+                minTrafficPerChunk
+            );
 
-        // 1. Kiểm tra làn này vừa có Ba Gác hay không để tính khoảng cách an toàn
-        float requiredGap = lastLaneWasBaGac[trafficLane] ? baGacSafeGap : minVehicleZGap;
+        int max =
+            Mathf.Max(
+                min,
+                maxTrafficPerChunk
+            );
 
-        if (currentSubSubZ - lastLaneSpawnZ[trafficLane] < requiredGap)
+        int count =
+            Random.Range(
+                min,
+                max + 1
+            );
+
+        if (count <= 0)
+            return;
+
+        List<float> positions =
+            GenerateTrafficPositions(
+                chunkStartZ,
+                count
+            );
+
+        for (
+            int i = 0;
+            i < positions.Count;
+            i++
+        )
         {
-            return; // Chưa đủ khoảng cách an toàn -> Bỏ qua không spawn ở đợt này
+            SpawnOneTraffic(
+                positions[i]
+            );
         }
+    }
 
-        // 2. Chọn loại xe (Xe Ba Gác hoặc Xe Ngược Chiều)
-        GameObject selectedPrefab = ChooseTrafficPrefab(currentSubSubZ);
 
-        if (selectedPrefab != null)
+    //=========================================================
+    // GENERATE TRAFFIC POSITIONS
+    //=========================================================
+
+    private List<float> GenerateTrafficPositions(
+        float chunkStartZ,
+        int count
+    )
+    {
+        List<float> result =
+            new List<float>();
+
+        float minZ =
+            chunkStartZ +
+            spawnEdgePadding;
+
+        float maxZ =
+            chunkStartZ +
+            chunkLength -
+            spawnEdgePadding;
+
+        if (maxZ < minZ)
+            return result;
+
+
+        //=====================================================
+        // 1 XE / CHUNK
+        //=====================================================
+
+        if (count == 1)
         {
-            Vector3 spawnPos = new Vector3(trafficX, 0.8f, currentSubSubZ);
-            bool isBaGac = (selectedPrefab == baGacRampPrefab);
-            Quaternion spawnRot = isBaGac ? Quaternion.identity : Quaternion.Euler(0, 180f, 0);
+            float candidate =
+                Mathf.Lerp(
+                    minZ,
+                    maxZ,
+                    0.5f
+                );
 
-            GameObject traffic = Instantiate(selectedPrefab, spawnPos, spawnRot);
-            traffic.transform.SetParent(transform);
-
-            // 3. Cập nhật trạng thái an toàn cho làn
-            lastLaneSpawnZ[trafficLane] = currentSubSubZ;
-            lastLaneWasBaGac[trafficLane] = isBaGac;
-
-            if (isBaGac)
+            if (IsSpawnPositionSafe(candidate))
             {
-                lastGlobalBaGacZ = currentSubSubZ;
+                result.Add(candidate);
             }
 
-            // 4. Sinh đồng xu ở làn khác
-            SpawnCoinsOnOtherLane(trafficLane, currentSubSubZ);
+            return result;
+        }
+
+
+        //=====================================================
+        // NHIỀU XE
+        //=====================================================
+
+        int attempts =
+            count * 100;
+
+        while (
+            result.Count < count &&
+            attempts > 0
+        )
+        {
+            attempts--;
+
+            float candidate =
+                Random.Range(
+                    minZ,
+                    maxZ
+                );
+
+            if (!IsSpawnPositionSafe(candidate))
+                continue;
+
+            bool localSafe = true;
+
+            for (
+                int i = 0;
+                i < result.Count;
+                i++
+            )
+            {
+                if (
+                    Mathf.Abs(
+                        result[i] -
+                        candidate
+                    ) <
+                    minimumTrafficGap
+                )
+                {
+                    localSafe = false;
+                    break;
+                }
+            }
+
+            if (!localSafe)
+                continue;
+
+            result.Add(candidate);
+        }
+
+        return result;
+    }
+
+
+    //=========================================================
+    // GLOBAL SPAWN SAFETY
+    //=========================================================
+
+    private bool IsSpawnPositionSafe(
+        float z
+    )
+    {
+        for (
+            int i = 0;
+            i < activeTraffic.Count;
+            i++
+        )
+        {
+            TrafficCarBehavior traffic =
+                activeTraffic[i];
+
+            if (traffic == null)
+                continue;
+
+            float distance =
+                Mathf.Abs(
+                    traffic.transform.position.z -
+                    z
+                );
+
+            if (
+                distance <
+                minimumTrafficGap * 0.65f
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    //=========================================================
+    // SPAWN ONE TRAFFIC
+    //=========================================================
+
+    private void SpawnOneTraffic(
+        float z
+    )
+    {
+        GameObject prefab =
+            ChooseTrafficPrefab();
+
+        if (prefab == null)
+        {
+            Debug.LogWarning(
+                "[RoadManager] Không có Traffic Prefab."
+            );
+
+            return;
+        }
+
+        int selectedLane =
+            SelectSpawnLane(z);
+
+        if (selectedLane < 0)
+        {
+            Debug.LogWarning(
+                "[RoadManager] Không tìm được lane an toàn tại Z = " +
+                z
+            );
+
+            return;
+        }
+
+        float x =
+            GetLaneX(selectedLane);
+
+        GameObject traffic =
+            Instantiate(
+                prefab,
+                new Vector3(
+                    x,
+                    trafficSpawnY,
+                    z
+                ),
+                Quaternion.identity
+            );
+
+        if (traffic == null)
+            return;
+
+
+        //=====================================================
+        // TRAFFIC VEHICLE
+        //=====================================================
+
+        TrafficVehicle vehicle =
+            traffic.GetComponent<TrafficVehicle>();
+
+        if (vehicle != null)
+        {
+            float speed =
+                Random.Range(
+                    minimumTrafficSpeed,
+                    maximumTrafficSpeed
+                );
+
+            vehicle.SetMoveSpeed(speed);
+            vehicle.SetTravelDirection(true);
+        }
+
+
+        //=====================================================
+        // TRAFFIC BEHAVIOR
+        //=====================================================
+
+        TrafficCarBehavior behavior =
+            traffic.GetComponent<TrafficCarBehavior>();
+
+        if (behavior != null)
+        {
+            behavior.SetLaneIndex(
+                selectedLane
+            );
+
+            activeTraffic.Add(
+                behavior
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[RoadManager] " +
+                traffic.name +
+                " thiếu TrafficCarBehavior."
+            );
+        }
+
+
+        //=====================================================
+        // COIN
+        //=====================================================
+
+        /*
+         * RoadManager KHÔNG còn tự spawn Coin.
+         *
+         * Chỉ gửi thông tin:
+         * - lane traffic đang chiếm
+         * - Z của traffic
+         *
+         * CoinSpawner tự quyết định:
+         * - lane coin
+         * - số lượng coin
+         * - khoảng cách
+         * - độ cao
+         * - pattern
+         */
+
+        if (coinSpawner != null)
+{
+    coinSpawner.SpawnCoins(
+        z,
+        selectedLane,
+        chunkLength
+    );
+}
+
+
+        //=====================================================
+        // REGISTER LANE
+        //=====================================================
+
+        RegisterSpawnedLane(
+            selectedLane
+        );
+
+
+        //=====================================================
+        // DEBUG
+        //=====================================================
+
+        if (debugLogs)
+        {
+            Debug.Log(
+                "[RoadManager] SPAWN | " +
+                traffic.name +
+                " | Lane " +
+                selectedLane +
+                " | X " +
+                x +
+                " | Z " +
+                z
+            );
         }
     }
 
-    private GameObject ChooseTrafficPrefab(float currentZ)
+
+    //=========================================================
+    // SELECT SPAWN LANE
+    //=========================================================
+
+    private int SelectSpawnLane(
+        float z
+    )
     {
-        if (oncomingCarPrefab == null && baGacRampPrefab == null) return null;
-        if (baGacRampPrefab == null) return oncomingCarPrefab;
-
-        // Nếu vừa xuất hiện Xe Ba Gác gần đây (dưới baGacMinDistance) -> Ép buộc ra xe ngược chiều
-        bool isBaGacOnCooldown = (currentZ - lastGlobalBaGacZ) < baGacMinDistance;
-
-        if (!isBaGacOnCooldown && Random.value <= baGacRatio)
+        if (!balancedLaneSpawn)
         {
-            return baGacRampPrefab;
+            return SelectRandomSafeLane(z);
         }
 
-        return oncomingCarPrefab;
+        int preferredLane =
+            Mathf.Clamp(
+                nextLaneIndex,
+                0,
+                2
+            );
+
+
+        //=====================================================
+        // ƯU TIÊN LANE THEO VÒNG
+        //=====================================================
+
+        if (
+            IsLaneSpawnSafe(
+                preferredLane,
+                z
+            )
+        )
+        {
+            return preferredLane;
+        }
+
+
+        //=====================================================
+        // FALLBACK
+        //=====================================================
+
+        for (
+            int offset = 1;
+            offset <= 2;
+            offset++
+        )
+        {
+            int lane =
+                (preferredLane + offset) % 3;
+
+            if (
+                IsLaneSpawnSafe(
+                    lane,
+                    z
+                )
+            )
+            {
+                return lane;
+            }
+        }
+
+        return -1;
     }
 
-    private void SpawnCoinsOnOtherLane(int occupiedLane, float currentZ)
-    {
-        if (coinPrefab == null) return;
 
-        int coinLane = Random.Range(0, 3);
-        while (coinLane == occupiedLane)
+    //=========================================================
+    // REGISTER SPAWNED LANE
+    //=========================================================
+
+    private void RegisterSpawnedLane(
+        int lane
+    )
+    {
+        nextLaneIndex =
+            (lane + 1) % 3;
+    }
+
+
+    //=========================================================
+    // RANDOM SAFE LANE
+    //=========================================================
+
+    private int SelectRandomSafeLane(
+        float z
+    )
+    {
+        List<int> lanes =
+            new List<int>
+            {
+                0,
+                1,
+                2
+            };
+
+        Shuffle(lanes);
+
+        for (
+            int i = 0;
+            i < lanes.Count;
+            i++
+        )
         {
-            coinLane = Random.Range(0, 3);
+            if (
+                IsLaneSpawnSafe(
+                    lanes[i],
+                    z
+                )
+            )
+            {
+                return lanes[i];
+            }
         }
 
-        float coinX = (coinLane - 1) * laneDistance;
-        for (int i = 0; i < 3; i++)
+        return -1;
+    }
+
+
+    //=========================================================
+    // LANE SPAWN SAFETY
+    //=========================================================
+
+    private bool IsLaneSpawnSafe(
+        int lane,
+        float z
+    )
+    {
+        if (lane < 0 || lane > 2)
+            return false;
+
+        float laneX =
+            GetLaneX(lane);
+
+        for (
+            int i = 0;
+            i < activeTraffic.Count;
+            i++
+        )
         {
-            Vector3 coinPos = new Vector3(coinX, 0.8f, currentZ - 3f + (i * 2.5f));
-            GameObject coin = Instantiate(coinPrefab, coinPos, Quaternion.identity);
-            coin.transform.SetParent(transform);
+            TrafficCarBehavior traffic =
+                activeTraffic[i];
+
+            if (traffic == null)
+                continue;
+
+            float xDistance =
+                Mathf.Abs(
+                    traffic.transform.position.x -
+                    laneX
+                );
+
+            if (xDistance > 2.5f)
+                continue;
+
+            float zDistance =
+                Mathf.Abs(
+                    traffic.transform.position.z -
+                    z
+                );
+
+            if (
+                zDistance <
+                minimumTrafficGap
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    //=========================================================
+    // CHOOSE TRAFFIC PREFAB
+    //=========================================================
+
+    private GameObject ChooseTrafficPrefab()
+    {
+        float total =
+            carProbability +
+            motorcycleProbability +
+            busProbability +
+            baGacProbability;
+
+        if (total <= 0f)
+            return carPrefab;
+
+        float roll =
+            Random.value * total;
+
+
+        //=====================================================
+        // CAR
+        //=====================================================
+
+        if (
+            roll <
+            carProbability
+        )
+        {
+            return carPrefab;
+        }
+
+        roll -=
+            carProbability;
+
+
+        //=====================================================
+        // MOTORCYCLE
+        //=====================================================
+
+        if (
+            roll <
+            motorcycleProbability
+        )
+        {
+            return motorcyclePrefab;
+        }
+
+        roll -=
+            motorcycleProbability;
+
+
+        //=====================================================
+        // BUS
+        //=====================================================
+
+        if (
+            roll <
+            busProbability
+        )
+        {
+            return busPrefab;
+        }
+
+
+        //=====================================================
+        // BA GÁC
+        //=====================================================
+
+        return baGacPrefab;
+    }
+
+
+    //=========================================================
+    // GET LANE X
+    //=========================================================
+
+    private float GetLaneX(
+        int lane
+    )
+    {
+        switch (lane)
+        {
+            case 0:
+                return leftLaneX;
+
+            case 1:
+                return centerLaneX;
+
+            case 2:
+                return rightLaneX;
+
+            default:
+                return centerLaneX;
         }
     }
 
-    private void DeleteRoad()
+
+    //=========================================================
+    // CLEANUP TRAFFIC
+    //=========================================================
+
+    private void CleanupTraffic()
     {
-        Destroy(activeRoads[0]);
+        for (
+            int i =
+                activeTraffic.Count - 1;
+            i >= 0;
+            i--
+        )
+        {
+            TrafficCarBehavior traffic =
+                activeTraffic[i];
+
+            if (traffic == null)
+            {
+                activeTraffic.RemoveAt(i);
+            }
+        }
+    }
+
+
+    //=========================================================
+    // DELETE OLDEST ROAD
+    //=========================================================
+
+    private void DeleteOldestRoad()
+    {
+        if (activeRoads.Count == 0)
+            return;
+
+        GameObject oldest =
+            activeRoads[0];
+
         activeRoads.RemoveAt(0);
+
+        if (oldest != null)
+        {
+            Destroy(oldest);
+        }
+    }
+
+
+    //=========================================================
+    // SHUFFLE
+    //=========================================================
+
+    private void Shuffle(
+        List<int> list
+    )
+    {
+        for (
+            int i = 0;
+            i < list.Count;
+            i++
+        )
+        {
+            int index =
+                Random.Range(
+                    i,
+                    list.Count
+                );
+
+            int temp =
+                list[i];
+
+            list[i] =
+                list[index];
+
+            list[index] =
+                temp;
+        }
+    }
+
+
+    //=========================================================
+    // GIZMOS
+    //=========================================================
+
+    private void OnDrawGizmosSelected()
+    {
+        for (
+            int i = 0;
+            i < 3;
+            i++
+        )
+        {
+            float x =
+                GetLaneX(i);
+
+            Gizmos.DrawLine(
+                new Vector3(
+                    x,
+                    0f,
+                    transform.position.z
+                ),
+                new Vector3(
+                    x,
+                    0f,
+                    transform.position.z +
+                    chunkLength
+                )
+            );
+        }
     }
 }

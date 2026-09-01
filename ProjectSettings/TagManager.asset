@@ -9,6 +9,10 @@ TagManager:
   - Ramp
   - Photon
   - PhotonItem
+  - Coin
+  - Magnet
+  - Shield
+  - Gum
   layers:
   - Default
   - TransparentFX

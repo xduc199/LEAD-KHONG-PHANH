@@ -3,10 +3,31 @@ using UnityEngine;
 public class AutoDespawnTraffic : MonoBehaviour
 {
     [Header("Despawn Settings")]
-    [Tooltip("Khoảng cách phía sau Player (mét) để xe tự biến mất khi ra khỏi tầm nhìn Camera")]
-    [SerializeField] private float despawnDistanceBehindPlayer = 15f;
+
+    [Tooltip(
+        "Khoảng cách phía sau Player mà traffic sẽ bị destroy."
+    )]
+    [SerializeField] private float despawnDistanceBehindPlayer = 30f;
+
+    [Tooltip(
+        "Nếu bật, traffic quá xa phía trước cũng sẽ bị destroy."
+    )]
+    [SerializeField] private bool despawnTooFarAhead = false;
+
+    [SerializeField] private float despawnDistanceAhead = 120f;
+
+    [Header("Player")]
+
+    [Tooltip(
+        "Tự tìm Player bằng Tag = Player."
+    )]
+    [SerializeField] private bool autoFindPlayer = true;
 
     private Transform playerTransform;
+
+    //=========================================================
+    // UNITY
+    //=========================================================
 
     private void Start()
     {
@@ -18,22 +39,88 @@ public class AutoDespawnTraffic : MonoBehaviour
         if (playerTransform == null)
         {
             FindPlayer();
+
+            if (playerTransform == null)
+                return;
+        }
+
+        float playerZ =
+            playerTransform.position.z;
+
+        float trafficZ =
+            transform.position.z;
+
+        //=====================================================
+        // DESPAWN PHÍA SAU
+        //=====================================================
+
+        if (
+            playerZ -
+            trafficZ >
+            despawnDistanceBehindPlayer
+        )
+        {
+            Destroy(
+                gameObject
+            );
+
             return;
         }
 
-        // Khi người chơi vượt qua xe (hoặc xe ngược chiều chạy tuốt về phía sau Player > 15m)
-        if (playerTransform.position.z - transform.position.z > despawnDistanceBehindPlayer)
+        //=====================================================
+        // DESPAWN PHÍA TRƯỚC
+        //=====================================================
+
+        if (despawnTooFarAhead)
         {
-            Destroy(gameObject);
+            if (
+                trafficZ -
+                playerZ >
+                despawnDistanceAhead
+            )
+            {
+                Destroy(
+                    gameObject
+                );
+            }
         }
     }
 
+    //=========================================================
+    // FIND PLAYER
+    //=========================================================
+
     private void FindPlayer()
     {
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
+        if (!autoFindPlayer)
+            return;
+
+        GameObject player =
+            GameObject.FindGameObjectWithTag(
+                "Player"
+            );
+
+        if (player != null)
         {
-            playerTransform = playerObj.transform;
+            playerTransform =
+                player.transform;
         }
+    }
+
+    //=========================================================
+    // PUBLIC
+    //=========================================================
+
+    public void SetPlayerTransform(
+        Transform player
+    )
+    {
+        playerTransform =
+            player;
+    }
+
+    public float GetDespawnDistance()
+    {
+        return despawnDistanceBehindPlayer;
     }
 }

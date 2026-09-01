@@ -1,0 +1,201 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7337677274896338777
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4442441917828869694}
+  - component: {fileID: 6863018750947186248}
+  - component: {fileID: 4136728519542426342}
+  - component: {fileID: 9090384428924092131}
+  - component: {fileID: 6355532575839377454}
+  - component: {fileID: -8513418253599816301}
+  m_Layer: 0
+  m_Name: ambu
+  m_TagString: Obstacle
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4442441917828869694
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2.8, z: 0}
+  m_LocalScale: {x: 5.57, y: 7, z: 10}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &6863018750947186248
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!23 &4136728519542426342
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!65 &9090384428924092131
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!54 &6355532575839377454
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 116
+  m_CollisionDetection: 0
+--- !u!114 &-8513418253599816301
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337677274896338777}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b868ecbf4cbfd64ea40eac179ef81b0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  vehicleHeightOffset: 0.5
+  minSpeed: 65
+  maxSpeed: 65
+  accelerationSmoothTime: 0.08
+  useFixedSpeed: 0
+  fixedSpeed: 35
+  leftLaneX: -6
+  centerLaneX: 0
+  rightLaneX: 6
+  laneSnapSpeed: 15
+  lifetime: 10
+  despawnBehindDistance: 120
+  despawnAheadDistance: 120
+  playerCollisionRadius: 2.8
+  playerCollisionForwardDistance: 3.5
+  collisionStartDelay: 0.2
+  playerHitCooldown: 1
+  playerUpForce: 32
+  playerForwardForce: 1.5
+  forcePositivePlayerZ: 1
+  trafficCollisionRadius: 0.5
+  trafficCollisionForwardDistance: 22
+  trafficForwardForce: 38
+  trafficUpForce: 5
+  trafficSideForce: 7
+  trafficHitCooldown: 0.35
+  trafficMinForwardDistance: -1
+  ignorePhotonTraffic: 1
+  launchedLinearDamping: 0.15
+  launchedAngularDamping: 2.5
+  allowTrafficRotation: 1
+  trafficTorque: 1.5
+  trafficPhysicsLifetime: 3.5
+  photonAmbulanceUpForce: 28
+  photonAmbulanceForwardForce: 18
+  photonAmbulanceSideForce: 5
+  photonAmbulanceLinearDamping: 0.15
+  photonAmbulanceAngularDamping: 2.5
+  allowPhotonAmbulanceRotation: 1
+  photonAmbulanceTorque: 2
+  photonAmbulancePhysicsLifetime: 4
+  rotationSpeed: 10
+  modelYRotationOffset: 0
+  ambulanceEngineClip: {fileID: 8300000, guid: 538fc624182baca42be1ecb38faca582, type: 3}
+  engineVolume: 0.833
+  engineLoop: 1
+  engineMinDistance: 5
+  engineMaxDistance: 45
+  forceCreateEngineAudio: 1
+  collisionEffectPrefab: {fileID: 5490609141483239431, guid: 4d032c166c00c8842a623d58cfd82698, type: 3}
