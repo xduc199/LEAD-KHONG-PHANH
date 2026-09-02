@@ -152,24 +152,31 @@ MonoBehaviour:
   vehicleHeightOffset: 0.5
   minSpeed: 65
   maxSpeed: 65
-  accelerationSmoothTime: 0.08
+  playerSpeedMultiplier: 1.4
+  speedBonusOverPlayer: 8
+  maxAmbulanceSpeed: 120
+  catchUpDistance: 25
+  catchUpSpeedBonus: 10
+  maintainMinimumRunningSpeed: 1
+  maintainCurrentSpeed: 1
+  accelerationSmoothTime: 0.5
   useFixedSpeed: 0
   fixedSpeed: 35
   leftLaneX: -6
   centerLaneX: 0
   rightLaneX: 6
   laneSnapSpeed: 15
-  lifetime: 10
-  despawnBehindDistance: 120
-  despawnAheadDistance: 120
-  playerCollisionRadius: 2.8
+  lifetime: 12
+  despawnBehindDistance: 100
+  despawnAheadDistance: 250
+  playerCollisionRadius: 4
   playerCollisionForwardDistance: 3.5
   collisionStartDelay: 0.2
-  playerHitCooldown: 1
+  playerHitCooldown: 2
   playerUpForce: 32
   playerForwardForce: 1.5
   forcePositivePlayerZ: 1
-  trafficCollisionRadius: 0.5
+  trafficCollisionRadius: 0
   trafficCollisionForwardDistance: 22
   trafficForwardForce: 38
   trafficUpForce: 5
@@ -188,7 +195,7 @@ MonoBehaviour:
   photonAmbulanceLinearDamping: 0.15
   photonAmbulanceAngularDamping: 2.5
   allowPhotonAmbulanceRotation: 1
-  photonAmbulanceTorque: 2
+  photonAmbulanceTorque: 2.1
   photonAmbulancePhysicsLifetime: 4
   rotationSpeed: 10
   modelYRotationOffset: 0

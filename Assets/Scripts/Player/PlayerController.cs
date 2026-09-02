@@ -525,10 +525,6 @@ public class PlayerController : MonoBehaviour
 
     private void SetupPlayerAudio()
     {
-        //=====================================================
-        // ENGINE SOURCE
-        //=====================================================
-
         if (engineAudioSource == null)
         {
             engineAudioSource =
@@ -545,10 +541,6 @@ public class PlayerController : MonoBehaviour
                 gameObject.AddComponent<AudioSource>();
         }
 
-
-        //=====================================================
-        // ENGINE CONFIG
-        //=====================================================
 
         if (engineAudioSource != null)
         {
@@ -584,10 +576,6 @@ public class PlayerController : MonoBehaviour
         }
 
 
-        //=====================================================
-        // SFX SOURCE
-        //=====================================================
-
         if (sfxAudioSource == null)
         {
             AudioSource[] sources =
@@ -611,10 +599,6 @@ public class PlayerController : MonoBehaviour
                 gameObject.AddComponent<AudioSource>();
         }
 
-
-        //=====================================================
-        // SFX CONFIG
-        //=====================================================
 
         if (sfxAudioSource != null)
         {
@@ -884,9 +868,7 @@ public class PlayerController : MonoBehaviour
 
         float elapsed = 0f;
 
-
         int flashesDone = 0;
-
 
         bool visible = true;
 
@@ -1313,176 +1295,169 @@ public class PlayerController : MonoBehaviour
     }
 
 
- 
-//=========================================================
-// SHIELD BLOCK
-//=========================================================
+    //=========================================================
+    // SHIELD BLOCK
+    //=========================================================
 
-private bool TryConsumeShield(
-    GameObject obstacle
-)
-{
-    //=====================================================
-    // PLAYER ĐANG ĐƯỢC SHIELD BẢO VỆ
-    //
-    // Shield đã block hit trước đó và Player vẫn đang
-    // trong thời gian bất tử.
-    //
-    // KHÔNG ConsumeShield() lần nữa.
-    // KHÔNG cho hit đi xuống KillPlayer().
-    //=====================================================
-
-    if (
-        shieldController != null &&
-        shieldController.IsInvulnerable()
+    // PUBLIC để AmbulanceController có thể gọi đúng toàn bộ
+    // logic Shield của Player.
+    public bool TryConsumeShield(
+        GameObject obstacle
     )
     {
-        return true;
-    }
+        //=====================================================
+        // PLAYER ĐANG ĐƯỢC SHIELD BẢO VỆ
+        //=====================================================
+
+        if (
+            shieldController != null &&
+            shieldController.IsInvulnerable()
+        )
+        {
+            return true;
+        }
 
 
-    //=====================================================
-    // HIT HIỆN TẠI ĐÃ ĐƯỢC BLOCK
-    //=====================================================
+        //=====================================================
+        // HIT HIỆN TẠI ĐÃ ĐƯỢC BLOCK
+        //=====================================================
 
-    if (isShieldBlockingHit)
-    {
-        return true;
-    }
-
-
-    //=====================================================
-    // PLAYER ĐANG TRONG COOLDOWN BẢO VỆ
-    //=====================================================
-
-    if (
-        shieldHitCooldownTimer > 0f
-    )
-    {
-        isShieldBlockingHit = true;
-
-        return true;
-    }
+        if (isShieldBlockingHit)
+        {
+            return true;
+        }
 
 
-    //=====================================================
-    // FIND SHIELD
-    //=====================================================
+        //=====================================================
+        // PLAYER ĐANG TRONG COOLDOWN BẢO VỆ
+        //=====================================================
 
-    if (
-        shieldController == null
-    )
-    {
-        FindShieldController();
-    }
+        if (
+            shieldHitCooldownTimer > 0f
+        )
+        {
+            isShieldBlockingHit = true;
 
-
-    //=====================================================
-    // NO SHIELD
-    //=====================================================
-
-    if (
-        shieldController == null
-    )
-    {
-        return false;
-    }
+            return true;
+        }
 
 
-    //=====================================================
-    // SHIELD ĐANG BẤT TỬ
-    //
-    // Kiểm tra lại lần nữa sau FindShieldController().
-    //=====================================================
+        //=====================================================
+        // FIND SHIELD
+        //=====================================================
 
-    if (
-        shieldController.IsInvulnerable()
-    )
-    {
-        return true;
-    }
+        if (
+            shieldController == null
+        )
+        {
+            FindShieldController();
+        }
 
 
-    //=====================================================
-    // SHIELD INACTIVE
-    //=====================================================
+        //=====================================================
+        // NO SHIELD
+        //=====================================================
 
-    if (
-        !shieldController.IsActive()
-    )
-    {
-        return false;
-    }
-
-
-    //=====================================================
-    // CONSUME SHIELD
-    //=====================================================
-
-    bool blocked =
-        shieldController.ConsumeShield();
+        if (
+            shieldController == null
+        )
+        {
+            return false;
+        }
 
 
-    if (!blocked)
-    {
-        return false;
-    }
+        //=====================================================
+        // SHIELD ĐANG BẤT TỬ
+        //=====================================================
+
+        if (
+            shieldController.IsInvulnerable()
+        )
+        {
+            return true;
+        }
 
 
-    //=====================================================
-    // MARK HIT PROTECTED
-    //=====================================================
+        //=====================================================
+        // SHIELD INACTIVE
+        //=====================================================
 
-    isShieldBlockingHit =
-        true;
+        if (
+            !shieldController.IsActive()
+        )
+        {
+            return false;
+        }
 
 
-    shieldHitCooldownTimer =
-        Mathf.Max(
-            0.01f,
-            shieldHitCooldown
+        //=====================================================
+        // CONSUME SHIELD
+        //=====================================================
+
+        bool blocked =
+            shieldController.ConsumeShield();
+
+
+        if (!blocked)
+        {
+            return false;
+        }
+
+
+        //=====================================================
+        // MARK HIT PROTECTED
+        //=====================================================
+
+        isShieldBlockingHit =
+            true;
+
+
+        shieldHitCooldownTimer =
+            Mathf.Max(
+                0.01f,
+                shieldHitCooldown
+            );
+
+
+        //=====================================================
+        // FLASH
+        //=====================================================
+
+        PlayShieldFlash();
+
+
+        //=====================================================
+        // AUDIO
+        //=====================================================
+
+        PlayPlayerSFX(
+            shieldBlockSound,
+            shieldBlockVolume
         );
 
 
-    //=====================================================
-    // FLASH
-    //=====================================================
+        //=====================================================
+        // PUSH
+        //=====================================================
 
-    PlayShieldFlash();
-
-
-    //=====================================================
-    // AUDIO
-    //=====================================================
-
-    PlayPlayerSFX(
-        shieldBlockSound,
-        shieldBlockVolume
-    );
+        PushAwayFromObstacle(
+            obstacle
+        );
 
 
-    //=====================================================
-    // PUSH
-    //=====================================================
+        //=====================================================
+        // DEBUG
+        //=====================================================
 
-    PushAwayFromObstacle(
-        obstacle
-    );
-
-
-    //=====================================================
-    // DEBUG
-    //=====================================================
-
-    Debug.Log(
-        "[PlayerController] " +
-        "SHIELD BLOCKED DAMAGE | " +
-        "Player WILL NOT DIE."
-    );
+        Debug.Log(
+            "[PlayerController] " +
+            "SHIELD BLOCKED DAMAGE | " +
+            "Player WILL NOT DIE."
+        );
 
 
-    return true;
-}
+        return true;
+    }
 
 
     //=========================================================
@@ -1561,17 +1536,9 @@ private bool TryConsumeShield(
         Vector3 force
     )
     {
-        //=====================================================
-        // PLAYER ĐÃ CHẾT
-        //=====================================================
-
         if (isDead)
             return;
 
-
-        //=====================================================
-        // PHOTON
-        //=====================================================
 
         if (
             photonController != null &&
@@ -1582,18 +1549,6 @@ private bool TryConsumeShield(
         }
 
 
-        //=====================================================
-        // SHIELD
-        //
-        // Đây là lớp bảo vệ cuối cùng.
-        //
-        // Exciter gọi:
-        //
-        //     player.ApplyKnockback()
-        //
-        // Shield vẫn được xử lý ở đây.
-        //=====================================================
-
         if (
             TryConsumeShield(null)
         )
@@ -1601,10 +1556,6 @@ private bool TryConsumeShield(
             return;
         }
 
-
-        //=====================================================
-        // FATAL
-        //=====================================================
 
         KillPlayer(
             force
@@ -1616,17 +1567,6 @@ private bool TryConsumeShield(
     // KILL PLAYER
     //=========================================================
 
-    /*
-     * Toàn bộ logic chết của Player được gom vào một chỗ.
-     *
-     * Điều này tránh:
-     *
-     * ApplyKnockback()
-     * ApplyFatalKnockback()
-     *
-     * mỗi hàm tự có một logic chết riêng.
-     */
-
     private void KillPlayer(
         Vector3 force
     )
@@ -1634,12 +1574,6 @@ private bool TryConsumeShield(
         if (isDead)
             return;
 
-
-        //=====================================================
-        // SHIELD PROTECTION
-        //
-        // Kiểm tra lại lần cuối trước khi chết.
-        //=====================================================
 
         if (
             isShieldBlockingHit
@@ -1657,20 +1591,12 @@ private bool TryConsumeShield(
         }
 
 
-        //=====================================================
-        // DEAD
-        //=====================================================
-
         isDead =
             true;
 
 
         StopEngineAudio();
 
-
-        //=====================================================
-        // STOP SHIELD FLASH
-        //=====================================================
 
         if (
             shieldFlashCoroutine != null
@@ -1688,10 +1614,6 @@ private bool TryConsumeShield(
             RestorePlayerRenderers();
         }
 
-
-        //=====================================================
-        // PHYSICS
-        //=====================================================
 
         if (rb != null)
         {
@@ -1731,10 +1653,6 @@ private bool TryConsumeShield(
         }
 
 
-        //=====================================================
-        // GAME OVER
-        //=====================================================
-
         if (
             GameManager.Instance != null
         )
@@ -1757,9 +1675,21 @@ private bool TryConsumeShield(
 
 
         //=====================================================
-        // SHIELD
+        // AMBULANCE
         //
-        // Shield luôn được xử lý trước.
+        // Ambulance tự quản lý.
+        //=====================================================
+
+        if (
+            IsAmbulance(obj)
+        )
+        {
+            return;
+        }
+
+
+        //=====================================================
+        // SHIELD
         //=====================================================
 
         if (
@@ -1852,6 +1782,100 @@ private bool TryConsumeShield(
 
 
     //=========================================================
+    // AMBULANCE DETECTION
+    //=========================================================
+
+    private bool IsAmbulance(
+        GameObject obj
+    )
+    {
+        if (obj == null)
+            return false;
+
+
+        AmbulanceController ambulance =
+            obj.GetComponentInParent<
+                AmbulanceController
+            >();
+
+
+        if (ambulance != null)
+        {
+            return true;
+        }
+
+
+        ambulance =
+            obj.GetComponentInChildren<
+                AmbulanceController
+            >(true);
+
+
+        if (ambulance != null)
+        {
+            return true;
+        }
+
+
+        Transform root =
+            obj.transform.root;
+
+
+        if (root != null)
+        {
+            ambulance =
+                root.GetComponent<
+                    AmbulanceController
+                >();
+
+
+            if (ambulance != null)
+            {
+                return true;
+            }
+        }
+
+
+        string objectName =
+            obj.name.ToLower();
+
+
+        if (
+            objectName.Contains("ambulance") ||
+            objectName.Contains("cuu thuong") ||
+            objectName.Contains("cuthuong") ||
+            objectName.Contains("xe_cuu_thuong") ||
+            objectName.Contains("xecutthuong")
+        )
+        {
+            return true;
+        }
+
+
+        if (root != null)
+        {
+            string rootName =
+                root.name.ToLower();
+
+
+            if (
+                rootName.Contains("ambulance") ||
+                rootName.Contains("cuu thuong") ||
+                rootName.Contains("cuthuong") ||
+                rootName.Contains("xe_cuu_thuong") ||
+                rootName.Contains("xecutthuong")
+            )
+            {
+                return true;
+            }
+        }
+
+
+        return false;
+    }
+
+
+    //=========================================================
     // FATAL KNOCKBACK
     //=========================================================
 
@@ -1863,12 +1887,6 @@ private bool TryConsumeShield(
             return;
 
 
-        //=====================================================
-        // SHIELD
-        //
-        // Lớp bảo vệ cuối cùng.
-        //=====================================================
-
         if (
             TryConsumeShield(null)
         )
@@ -1876,10 +1894,6 @@ private bool TryConsumeShield(
             return;
         }
 
-
-        //=====================================================
-        // PHOTON
-        //=====================================================
 
         if (
             photonController != null &&
@@ -1889,10 +1903,6 @@ private bool TryConsumeShield(
             return;
         }
 
-
-        //=====================================================
-        // FATAL
-        //=====================================================
 
         KillPlayer(
             force
@@ -1971,6 +1981,18 @@ private bool TryConsumeShield(
 
 
         //=====================================================
+        // AMBULANCE
+        //=====================================================
+
+        if (
+            IsAmbulance(obj)
+        )
+        {
+            return;
+        }
+
+
+        //=====================================================
         // OBSTACLE
         //=====================================================
 
@@ -2036,6 +2058,18 @@ private bool TryConsumeShield(
         //=====================================================
 
         if (IsShield(obj))
+        {
+            return;
+        }
+
+
+        //=====================================================
+        // AMBULANCE
+        //=====================================================
+
+        if (
+            IsAmbulance(obj)
+        )
         {
             return;
         }
@@ -2226,6 +2260,14 @@ private bool TryConsumeShield(
     {
         if (obj == null)
             return false;
+
+
+        if (
+            IsAmbulance(obj)
+        )
+        {
+            return false;
+        }
 
 
         TrafficCarBehavior traffic =

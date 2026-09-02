@@ -17,6 +17,25 @@ public class ShieldController : MonoBehaviour
 
 
     //=============================================================
+    // SHIELD WARNING
+    //=============================================================
+
+    [Header("Shield Warning")]
+
+    [Tooltip("Khi Shield còn ít thời gian hơn giá trị này, Shield Effect sẽ bắt đầu nhấp nháy.")]
+    [SerializeField, Min(0f)]
+    private float warningTime = 2f;
+
+    [Tooltip("Khoảng thời gian giữa mỗi lần bật/tắt Shield Effect khi đang cảnh báo.")]
+    [SerializeField, Min(0.01f)]
+    private float warningBlinkInterval = 0.12f;
+
+    [Tooltip("Bật/tắt hiệu ứng nhấp nháy khi Shield sắp hết thời gian.")]
+    [SerializeField]
+    private bool enableWarningBlink = true;
+
+
+    //=============================================================
     // INVULNERABILITY
     //=============================================================
 
@@ -110,6 +129,19 @@ public class ShieldController : MonoBehaviour
 
 
     //=============================================================
+    // RUNTIME - SHIELD WARNING
+    //=============================================================
+
+    private Coroutine shieldWarningCoroutine;
+
+    private bool isShieldWarning;
+
+    private Renderer[] shieldRenderers;
+
+    private bool[] shieldRendererOriginalStates;
+
+
+    //=============================================================
     // RUNTIME - INVULNERABILITY
     //=============================================================
 
@@ -178,6 +210,8 @@ public class ShieldController : MonoBehaviour
         {
             remainingTime = duration;
 
+            ResetShieldWarning();
+
             Play2DSound(
                 pickupSound,
                 pickupVolume,
@@ -209,6 +243,13 @@ public class ShieldController : MonoBehaviour
                 maxHits,
                 1
             );
+
+
+        //=========================================================
+        // RESET WARNING
+        //=========================================================
+
+        ResetShieldWarning();
 
 
         //=========================================================
@@ -348,6 +389,13 @@ public class ShieldController : MonoBehaviour
 
 
         //=========================================================
+        // CACHE SHIELD RENDERERS
+        //=========================================================
+
+        CacheShieldRenderers();
+
+
+        //=========================================================
         // PARTICLES
         //=========================================================
 
@@ -428,6 +476,285 @@ public class ShieldController : MonoBehaviour
 
 
     //=============================================================
+    // SHIELD WARNING
+    //=============================================================
+
+    private void CheckShieldWarning()
+    {
+        if (!isActive)
+            return;
+
+        if (!enableWarningBlink)
+            return;
+
+        if (activeShieldEffect == null)
+            return;
+
+        if (isShieldWarning)
+            return;
+
+        if (warningTime <= 0f)
+            return;
+
+        if (remainingTime > warningTime)
+            return;
+
+
+        //=========================================================
+        // START WARNING BLINK
+        //=========================================================
+
+        isShieldWarning = true;
+
+        CacheShieldRenderers();
+
+        if (shieldWarningCoroutine != null)
+        {
+            StopCoroutine(
+                shieldWarningCoroutine
+            );
+
+            shieldWarningCoroutine = null;
+        }
+
+        shieldWarningCoroutine =
+            StartCoroutine(
+                ShieldWarningBlinkRoutine()
+            );
+
+
+        if (debugLogs)
+        {
+            Debug.Log(
+                "[ShieldController] SHIELD WARNING | " +
+                "Remaining=" + remainingTime.ToString("F2") +
+                "s",
+                this
+            );
+        }
+    }
+
+
+    //=============================================================
+    // SHIELD WARNING UPDATE
+    //=============================================================
+
+    private void LateUpdate()
+    {
+        if (!isActive)
+            return;
+
+        if (!isShieldWarning)
+        {
+            CheckShieldWarning();
+        }
+    }
+
+
+    //=============================================================
+    // SHIELD WARNING BLINK
+    //=============================================================
+
+    private IEnumerator ShieldWarningBlinkRoutine()
+    {
+        float interval =
+            Mathf.Max(
+                0.01f,
+                warningBlinkInterval
+            );
+
+        bool visible = true;
+
+
+        while (
+            isActive &&
+            activeShieldEffect != null &&
+            remainingTime > 0f
+        )
+        {
+            visible = !visible;
+
+            SetShieldRenderersVisible(
+                visible
+            );
+
+
+            yield return new WaitForSeconds(
+                interval
+            );
+        }
+
+
+        //=========================================================
+        // RESTORE SHIELD VISUAL
+        //=========================================================
+
+        RestoreShieldRenderers();
+
+        shieldWarningCoroutine = null;
+    }
+
+
+    //=============================================================
+    // RESET SHIELD WARNING
+    //=============================================================
+
+    private void ResetShieldWarning()
+    {
+        isShieldWarning = false;
+
+
+        if (shieldWarningCoroutine != null)
+        {
+            StopCoroutine(
+                shieldWarningCoroutine
+            );
+
+            shieldWarningCoroutine = null;
+        }
+
+
+        RestoreShieldRenderers();
+    }
+
+
+    //=============================================================
+    // CACHE SHIELD RENDERERS
+    //=============================================================
+
+    private void CacheShieldRenderers()
+    {
+        if (activeShieldEffect == null)
+            return;
+
+
+        shieldRenderers =
+            activeShieldEffect.GetComponentsInChildren<Renderer>(
+                true
+            );
+
+
+        if (
+            shieldRenderers == null ||
+            shieldRenderers.Length == 0
+        )
+        {
+            shieldRendererOriginalStates = null;
+            return;
+        }
+
+
+        shieldRendererOriginalStates =
+            new bool[shieldRenderers.Length];
+
+
+        for (
+            int i = 0;
+            i < shieldRenderers.Length;
+            i++
+        )
+        {
+            if (shieldRenderers[i] == null)
+            {
+                shieldRendererOriginalStates[i] = false;
+                continue;
+            }
+
+
+            shieldRendererOriginalStates[i] =
+                shieldRenderers[i].enabled;
+        }
+    }
+
+
+    //=============================================================
+    // SET SHIELD RENDERERS
+    //=============================================================
+
+    private void SetShieldRenderersVisible(
+        bool visible
+    )
+    {
+        if (
+            shieldRenderers == null ||
+            shieldRenderers.Length == 0
+        )
+        {
+            return;
+        }
+
+
+        for (
+            int i = 0;
+            i < shieldRenderers.Length;
+            i++
+        )
+        {
+            Renderer renderer =
+                shieldRenderers[i];
+
+
+            if (renderer == null)
+                continue;
+
+
+            renderer.enabled =
+                visible &&
+                (
+                    shieldRendererOriginalStates == null ||
+                    i >= shieldRendererOriginalStates.Length ||
+                    shieldRendererOriginalStates[i]
+                );
+        }
+    }
+
+
+    //=============================================================
+    // RESTORE SHIELD RENDERERS
+    //=============================================================
+
+    private void RestoreShieldRenderers()
+    {
+        if (
+            shieldRenderers == null ||
+            shieldRenderers.Length == 0
+        )
+        {
+            return;
+        }
+
+
+        for (
+            int i = 0;
+            i < shieldRenderers.Length;
+            i++
+        )
+        {
+            Renderer renderer =
+                shieldRenderers[i];
+
+
+            if (renderer == null)
+                continue;
+
+
+            if (
+                shieldRendererOriginalStates != null &&
+                i < shieldRendererOriginalStates.Length
+            )
+            {
+                renderer.enabled =
+                    shieldRendererOriginalStates[i];
+            }
+            else
+            {
+                renderer.enabled = true;
+            }
+        }
+    }
+
+
+    //=============================================================
     // CONSUME SHIELD
     //=============================================================
 
@@ -480,8 +807,6 @@ public class ShieldController : MonoBehaviour
 
         //=========================================================
         // START INVULNERABILITY
-        //
-        // QUAN TRỌNG:
         //
         // Gọi ngay tại thời điểm Shield block.
         //
@@ -628,7 +953,6 @@ public class ShieldController : MonoBehaviour
         //=========================================================
 
         RestorePlayerRenderers();
-
 
         invulnerabilityCoroutine = null;
     }
@@ -861,8 +1185,23 @@ public class ShieldController : MonoBehaviour
         remainingHits = 0;
 
 
+        //=========================================================
+        // STOP WARNING BLINK
+        //=========================================================
+
+        ResetShieldWarning();
+
+
+        //=========================================================
+        // DESTROY EFFECT
+        //=========================================================
+
         DestroyShieldEffect();
 
+
+        //=========================================================
+        // BREAK AUDIO
+        //=========================================================
 
         Play2DSound(
             breakSound,
@@ -898,6 +1237,17 @@ public class ShieldController : MonoBehaviour
         remainingHits = 0;
 
 
+        //=========================================================
+        // STOP WARNING BLINK
+        //=========================================================
+
+        ResetShieldWarning();
+
+
+        //=========================================================
+        // DESTROY EFFECT
+        //=========================================================
+
         DestroyShieldEffect();
 
 
@@ -917,6 +1267,27 @@ public class ShieldController : MonoBehaviour
 
     private void DestroyShieldEffect()
     {
+        //=========================================================
+        // STOP WARNING BLINK
+        //=========================================================
+
+        if (shieldWarningCoroutine != null)
+        {
+            StopCoroutine(
+                shieldWarningCoroutine
+            );
+
+            shieldWarningCoroutine = null;
+        }
+
+
+        isShieldWarning = false;
+
+
+        //=========================================================
+        // DESTROY
+        //=========================================================
+
         if (activeShieldEffect == null)
             return;
 
@@ -925,8 +1296,12 @@ public class ShieldController : MonoBehaviour
             activeShieldEffect
         );
 
-
         activeShieldEffect = null;
+
+
+        shieldRenderers = null;
+
+        shieldRendererOriginalStates = null;
     }
 
 
@@ -1062,7 +1437,19 @@ public class ShieldController : MonoBehaviour
         }
 
 
+        if (shieldWarningCoroutine != null)
+        {
+            StopCoroutine(
+                shieldWarningCoroutine
+            );
+
+            shieldWarningCoroutine = null;
+        }
+
+
         RestorePlayerRenderers();
+
+        RestoreShieldRenderers();
     }
 
 
@@ -1083,6 +1470,20 @@ public class ShieldController : MonoBehaviour
             Mathf.Max(
                 1,
                 maxHits
+            );
+
+
+        warningTime =
+            Mathf.Max(
+                0f,
+                warningTime
+            );
+
+
+        warningBlinkInterval =
+            Mathf.Max(
+                0.01f,
+                warningBlinkInterval
             );
 
 

@@ -32,6 +32,28 @@ public class CoinSpawner : MonoBehaviour
 
 
     //=========================================================
+    // RANDOM LANE
+    //=========================================================
+
+    [Header("Random Lane")]
+
+    [Tooltip(
+        "Nếu bật, mỗi nhóm coin sẽ tự chọn ngẫu nhiên " +
+        "lane trái / giữa / phải."
+    )]
+    [SerializeField]
+    private bool randomLane = true;
+
+
+    [Tooltip(
+        "Nếu bật, một nhóm coin sẽ không spawn cùng lane " +
+        "với nhóm trước đó."
+    )]
+    [SerializeField]
+    private bool avoidSameLane = true;
+
+
+    //=========================================================
     // SAFETY
     //=========================================================
 
@@ -50,6 +72,13 @@ public class CoinSpawner : MonoBehaviour
 
     [SerializeField]
     private bool debugLogs = false;
+
+
+    //=========================================================
+    // INTERNAL
+    //=========================================================
+
+    private int lastSpawnedLane = -1;
 
 
     //=========================================================
@@ -80,6 +109,13 @@ public class CoinSpawner : MonoBehaviour
 
     /// <summary>
     /// Spawn một nhóm coin theo lane.
+    ///
+    /// Nếu randomLane = true:
+    ///     lane truyền vào sẽ được bỏ qua
+    ///     và CoinSpawner tự chọn lane ngẫu nhiên.
+    ///
+    /// Nếu randomLane = false:
+    ///     sử dụng lane được truyền vào như hệ thống cũ.
     /// </summary>
     public void SpawnCoins(
         float startZ,
@@ -96,24 +132,50 @@ public class CoinSpawner : MonoBehaviour
             return;
         }
 
+
         if (coinsPerGroup <= 0)
             return;
+
+
+        //=====================================================
+        // RANDOM LANE
+        //=====================================================
+
+        if (randomLane)
+        {
+            lane =
+                GetRandomLane();
+        }
+        else
+        {
+            lane =
+                Mathf.Clamp(
+                    lane,
+                    0,
+                    2
+                );
+        }
+
 
         float laneX =
             GetLaneX(lane);
 
+
         float availableStart =
             startZ +
             edgePadding;
+
 
         float availableEnd =
             startZ +
             chunkLength -
             edgePadding;
 
+
         float totalLength =
             (coinsPerGroup - 1) *
             coinSpacing;
+
 
         //=====================================================
         // TÍNH VỊ TRÍ BẮT ĐẦU
@@ -122,9 +184,11 @@ public class CoinSpawner : MonoBehaviour
         float minStart =
             availableStart;
 
+
         float maxStart =
             availableEnd -
             totalLength;
+
 
         if (maxStart < minStart)
         {
@@ -132,11 +196,13 @@ public class CoinSpawner : MonoBehaviour
                 minStart;
         }
 
+
         float spawnStartZ =
             Random.Range(
                 minStart,
                 maxStart
             );
+
 
         //=====================================================
         // SPAWN
@@ -152,6 +218,7 @@ public class CoinSpawner : MonoBehaviour
                 spawnStartZ +
                 i * coinSpacing;
 
+
             SpawnOneCoin(
                 new Vector3(
                     laneX,
@@ -161,15 +228,78 @@ public class CoinSpawner : MonoBehaviour
             );
         }
 
+
+        //=====================================================
+        // SAVE LAST LANE
+        //=====================================================
+
+        lastSpawnedLane =
+            lane;
+
+
+        //=====================================================
+        // DEBUG
+        //=====================================================
+
         if (debugLogs)
         {
             Debug.Log(
                 "[CoinSpawner] Spawned " +
                 coinsPerGroup +
                 " coins | Lane = " +
-                lane
+                lane +
+                " | X = " +
+                laneX
             );
         }
+    }
+
+
+    //=========================================================
+    // GET RANDOM LANE
+    //=========================================================
+
+    private int GetRandomLane()
+    {
+        //=====================================================
+        // KHÔNG CẦN TRÁNH LANE CŨ
+        //=====================================================
+
+        if (
+            !avoidSameLane ||
+            lastSpawnedLane < 0
+        )
+        {
+            return Random.Range(
+                0,
+                3
+            );
+        }
+
+
+        //=====================================================
+        // CHỌN LANE KHÁC LANE TRƯỚC
+        //=====================================================
+
+        int newLane;
+
+
+        do
+        {
+            newLane =
+                Random.Range(
+                    0,
+                    3
+                );
+
+        }
+        while (
+            newLane ==
+            lastSpawnedLane
+        );
+
+
+        return newLane;
     }
 
 
@@ -184,12 +314,14 @@ public class CoinSpawner : MonoBehaviour
         if (coinPrefab == null)
             return;
 
+
         GameObject coin =
             Instantiate(
                 coinPrefab,
                 position,
                 Quaternion.identity
             );
+
 
         coin.transform.SetParent(
             transform
@@ -204,6 +336,9 @@ public class CoinSpawner : MonoBehaviour
     /// <summary>
     /// API dùng khi RoadManager muốn spawn coin
     /// tại một vị trí cụ thể.
+    ///
+    /// Hàm này KHÔNG random lane,
+    /// vì vị trí đã được truyền trực tiếp.
     /// </summary>
     public void SpawnCoinLine(
         Vector3 startPosition,
@@ -220,16 +355,23 @@ public class CoinSpawner : MonoBehaviour
             return;
         }
 
+
         if (count <= 0)
             return;
 
-        if (direction.sqrMagnitude <= 0.001f)
+
+        if (
+            direction.sqrMagnitude <=
+            0.001f
+        )
         {
             direction =
                 Vector3.forward;
         }
 
+
         direction.Normalize();
+
 
         for (
             int i = 0;
@@ -242,6 +384,7 @@ public class CoinSpawner : MonoBehaviour
                 direction *
                 coinSpacing *
                 i;
+
 
             SpawnOneCoin(
                 position
@@ -261,15 +404,22 @@ public class CoinSpawner : MonoBehaviour
         switch (lane)
         {
             case 0:
+
                 return -5f;
 
+
             case 1:
+
                 return 0f;
 
+
             case 2:
+
                 return 5f;
 
+
             default:
+
                 return 0f;
         }
     }
@@ -284,11 +434,14 @@ public class CoinSpawner : MonoBehaviour
         if (coinsPerGroup < 0)
             coinsPerGroup = 0;
 
+
         if (coinSpacing < 0.1f)
             coinSpacing = 0.1f;
 
+
         if (coinHeight < 0f)
             coinHeight = 0f;
+
 
         if (edgePadding < 0f)
             edgePadding = 0f;

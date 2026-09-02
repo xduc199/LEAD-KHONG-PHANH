@@ -323,6 +323,8 @@ MonoBehaviour:
   coinsPerGroup: 5
   coinSpacing: 2.5
   coinHeight: 1
+  randomLane: 1
+  avoidSameLane: 1
   edgePadding: 2
   debugLogs: 0
 --- !u!114 &160238651
@@ -843,6 +845,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: c3170f0fd71443e4397ea63e9cf586a1, type: 3}
   m_PrefabInstance: {fileID: 1868113361}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &395274542
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 395274543}
+  m_Layer: 0
+  m_Name: DriftEffectPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &395274543
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 395274542}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.015000001, z: -0.995}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 373608354}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1927,7 +1960,7 @@ Transform:
   m_GameObject: {fileID: 1734020567}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0.17, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1997,6 +2030,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   duration: 15
   maxHits: 1
+  warningTime: 2
+  warningBlinkInterval: 0.08
+  enableWarningBlink: 1
   invulnerabilityDuration: 2
   enableBlink: 1
   blinkInterval: 0.1
@@ -2152,6 +2188,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: c3170f0fd71443e4397ea63e9cf586a1, type: 3}
       insertIndex: 1
       addedObject: {fileID: 482470446}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: c3170f0fd71443e4397ea63e9cf586a1, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 395274543}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c3170f0fd71443e4397ea63e9cf586a1, type: 3}
 --- !u!23 &1921645431 stripped

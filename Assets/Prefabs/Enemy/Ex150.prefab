@@ -2527,7 +2527,7 @@ MonoBehaviour:
   accelerationSmoothTime: 0.08
   rotationSpeed: 10
   modelYRotationOffset: 180
-  lifetime: 10
+  lifetime: 4
   weaveAmplitude: 0.8
   weaveFrequency: 0.08
   weaveStartDelay: 0.15
