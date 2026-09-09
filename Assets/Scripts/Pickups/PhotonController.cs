@@ -1,8 +1,50 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Video;
 
 public class PhotonController : MonoBehaviour
 {
+    //=========================================================
+    // PHOTON SPEED LINES - CANVAS VIDEO
+    //=========================================================
+
+    [Header("Photon Speed Lines - Canvas")]
+
+    [Tooltip(
+        "Canvas chứa hiệu ứng vệt sáng Photon. " +
+        "Canvas này chỉ bật khi Photon đang hoạt động."
+    )]
+    [SerializeField]
+    private GameObject photonSpeedLinesCanvas;
+
+    [Tooltip(
+        "VideoPlayer nằm trong PhotonSpeedCanvas. " +
+        "Video này phát speed lines."
+    )]
+    [SerializeField]
+    private VideoPlayer photonSpeedLinesVideo;
+
+
+    //=========================================================
+    // LEGACY / CAR SMOKE EFFECT
+    //=========================================================
+
+    [Header("Photon Car Smoke Effect")]
+
+    [Tooltip(
+        "Prefab hiệu ứng khói xe Photon hiện tại. " +
+        "Giữ nguyên hệ thống cũ."
+    )]
+    [SerializeField]
+    private GameObject photonSpeedEffectPrefab;
+
+    [Tooltip(
+        "Điểm spawn hiệu ứng khói xe Photon."
+    )]
+    [SerializeField]
+    private Transform photonEffectPoint;
+
+
     //=========================================================
     // PHOTON BURST
     //=========================================================
@@ -104,19 +146,6 @@ public class PhotonController : MonoBehaviour
 
     [SerializeField]
     private GameObject photonVisual;
-
-
-    //=========================================================
-    // SPEED EFFECT
-    //=========================================================
-
-    [Header("Photon Speed Effect")]
-
-    [SerializeField]
-    private GameObject photonSpeedEffectPrefab;
-
-    [SerializeField]
-    private Transform photonEffectPoint;
 
 
     //=========================================================
@@ -222,9 +251,39 @@ public class PhotonController : MonoBehaviour
 
         SetupAudioSource();
 
+        //=====================================================
+        // PHOTON CAR VISUAL
+        //=====================================================
+
         if (photonVisual != null)
         {
             photonVisual.SetActive(false);
+        }
+
+        //=====================================================
+        // PHOTON SPEED LINES CANVAS
+        //=====================================================
+
+        SetupPhotonSpeedLines();
+    }
+
+
+    //=========================================================
+    // SETUP PHOTON SPEED LINES
+    //=========================================================
+
+    private void SetupPhotonSpeedLines()
+    {
+        if (photonSpeedLinesVideo != null)
+        {
+            photonSpeedLinesVideo.Stop();
+
+            photonSpeedLinesVideo.time = 0f;
+        }
+
+        if (photonSpeedLinesCanvas != null)
+        {
+            photonSpeedLinesCanvas.SetActive(false);
         }
     }
 
@@ -329,64 +388,65 @@ public class PhotonController : MonoBehaviour
     // PROCESS HIT
     //=========================================================
 
-   private void ProcessPhotonHit(
-    GameObject obj
-)
-{
-    if (!isPhotonActive)
-    {
-        return;
-    }
-
-    if (obj == null)
-    {
-        return;
-    }
-
-    //=====================================================
-    // KHÔNG TỰ HIT
-    //=====================================================
-
-    if (
-        obj.transform.root ==
-        transform.root
+    private void ProcessPhotonHit(
+        GameObject obj
     )
     {
-        return;
+        if (!isPhotonActive)
+        {
+            return;
+        }
+
+        if (obj == null)
+        {
+            return;
+        }
+
+        //=====================================================
+        // KHÔNG TỰ HIT
+        //=====================================================
+
+        if (
+            obj.transform.root ==
+            transform.root
+        )
+        {
+            return;
+        }
+
+        //=====================================================
+        // TÌM TRAFFIC
+        //=====================================================
+
+        TrafficVehicle traffic =
+            obj.GetComponent<TrafficVehicle>();
+
+        if (traffic == null)
+        {
+            traffic =
+                obj.GetComponentInParent<TrafficVehicle>();
+        }
+
+        if (traffic == null)
+        {
+            traffic =
+                obj.GetComponentInChildren<TrafficVehicle>();
+        }
+
+        //=====================================================
+        // CHỈ XỬ LÝ TRAFFIC
+        //=====================================================
+
+        if (traffic == null)
+        {
+            return;
+        }
+
+        HitTrafficVehicle(
+            traffic
+        );
     }
 
-    //=====================================================
-    // TÌM TRAFFIC
-    //=====================================================
-
-    TrafficVehicle traffic =
-        obj.GetComponent<TrafficVehicle>();
-
-    if (traffic == null)
-    {
-        traffic =
-            obj.GetComponentInParent<TrafficVehicle>();
-    }
-
-    if (traffic == null)
-    {
-        traffic =
-            obj.GetComponentInChildren<TrafficVehicle>();
-    }
-
-    //=====================================================
-    // CHỈ XỬ LÝ TRAFFIC
-    //=====================================================
-
-    if (traffic == null)
-    {
-        return;
-    }
-
-    HitTrafficVehicle(
-        traffic
-    );
-}
 
     //=========================================================
     // SETUP RENDERERS
@@ -521,6 +581,10 @@ public class PhotonController : MonoBehaviour
                     continue;
                 }
 
+                //=================================================
+                // ORIGINAL COLOR
+                //=================================================
+
                 if (
                     material.HasProperty(
                         "_BaseColor"
@@ -532,11 +596,28 @@ public class PhotonController : MonoBehaviour
                             "_BaseColor"
                         );
                 }
-                else
+                else if (
+                    material.HasProperty(
+                        "_Color"
+                    )
+                )
                 {
                     originalColors[i][j] =
-                        material.color;
+                        material.GetColor(
+                            "_Color"
+                        );
                 }
+                else
+                {
+                    // Shader không có property màu.
+                    // Không gọi material.color.
+                    originalColors[i][j] =
+                        Color.white;
+                }
+
+                //=================================================
+                // EMISSION
+                //=================================================
 
                 if (
                     material.HasProperty(
@@ -636,7 +717,17 @@ public class PhotonController : MonoBehaviour
 
         ApplyPhotonVisual();
 
+        //=====================================================
+        // CAR SMOKE
+        //=====================================================
+
         SpawnSpeedEffect();
+
+        //=====================================================
+        // CANVAS SPEED LINES
+        //=====================================================
+
+        PlayPhotonSpeedLines();
 
         if (!wasAlreadyActive)
         {
@@ -674,7 +765,17 @@ public class PhotonController : MonoBehaviour
 
         RestorePhotonVisual();
 
+        //=====================================================
+        // CAR SMOKE
+        //=====================================================
+
         RemoveSpeedEffect();
+
+        //=====================================================
+        // CANVAS SPEED LINES
+        //=====================================================
+
+        StopPhotonSpeedLines();
 
         if (GameManager.Instance != null)
         {
@@ -963,7 +1064,77 @@ public class PhotonController : MonoBehaviour
 
 
     //=========================================================
-    // SPEED EFFECT
+    // CANVAS SPEED LINES
+    //=========================================================
+
+    private void PlayPhotonSpeedLines()
+    {
+        if (photonSpeedLinesCanvas == null)
+        {
+            Debug.LogWarning(
+                "[PhotonController] " +
+                "Photon Speed Lines Canvas chưa được gán.",
+                this
+            );
+
+            return;
+        }
+
+        photonSpeedLinesCanvas.SetActive(true);
+
+        if (photonSpeedLinesVideo == null)
+        {
+            Debug.LogWarning(
+                "[PhotonController] " +
+                "Photon Speed Lines Video chưa được gán.",
+                this
+            );
+
+            return;
+        }
+
+        photonSpeedLinesVideo.Stop();
+
+        photonSpeedLinesVideo.time = 0f;
+
+        photonSpeedLinesVideo.Play();
+
+        Debug.Log(
+            "[PhotonController] " +
+            "Photon Speed Lines ON",
+            this
+        );
+    }
+
+
+    //=========================================================
+    // STOP CANVAS SPEED LINES
+    //=========================================================
+
+    private void StopPhotonSpeedLines()
+    {
+        if (photonSpeedLinesVideo != null)
+        {
+            photonSpeedLinesVideo.Stop();
+
+            photonSpeedLinesVideo.time = 0f;
+        }
+
+        if (photonSpeedLinesCanvas != null)
+        {
+            photonSpeedLinesCanvas.SetActive(false);
+        }
+
+        Debug.Log(
+            "[PhotonController] " +
+            "Photon Speed Lines OFF",
+            this
+        );
+    }
+
+
+    //=========================================================
+    // SPEED EFFECT - CAR SMOKE
     //=========================================================
 
     private void SpawnSpeedEffect()
@@ -973,36 +1144,154 @@ public class PhotonController : MonoBehaviour
             return;
         }
 
-        if (currentSpeedEffect != null)
-        {
-            currentSpeedEffect.SetActive(true);
-
-            return;
-        }
-
         Transform spawnPoint =
             photonEffectPoint != null
                 ? photonEffectPoint
                 : transform;
 
+        //=====================================================
+        // ĐÃ CÓ EFFECT
+        //=====================================================
+
+        if (currentSpeedEffect != null)
+        {
+            currentSpeedEffect.SetActive(true);
+
+            PlayVideoEffects(
+                currentSpeedEffect
+            );
+
+            PlayParticleEffects(
+                currentSpeedEffect
+            );
+
+            return;
+        }
+
+        //=====================================================
+        // CREATE EFFECT
+        //=====================================================
+
         currentSpeedEffect =
             Instantiate(
                 photonSpeedEffectPrefab,
-                spawnPoint.position,
-                spawnPoint.rotation
+                spawnPoint
             );
 
-        currentSpeedEffect.transform.SetParent(
-            spawnPoint,
-            true
-        );
+        if (currentSpeedEffect == null)
+        {
+            return;
+        }
+
+        currentSpeedEffect.transform.localPosition =
+            Vector3.zero;
+
+        currentSpeedEffect.transform.localRotation =
+            Quaternion.identity;
+
+        currentSpeedEffect.transform.localScale =
+            Vector3.one;
 
         currentSpeedEffect.SetActive(true);
+
+        PlayVideoEffects(
+            currentSpeedEffect
+        );
+
+        PlayParticleEffects(
+            currentSpeedEffect
+        );
+
+        Debug.Log(
+            "[PhotonController] " +
+            "Photon Car Smoke Effect ON | " +
+            "Point=" +
+            spawnPoint.name,
+            this
+        );
     }
 
 
     //=========================================================
-    // REMOVE SPEED EFFECT
+    // PLAY VIDEO EFFECTS
+    //=========================================================
+
+    private void PlayVideoEffects(
+        GameObject effect
+    )
+    {
+        if (effect == null)
+        {
+            return;
+        }
+
+        VideoPlayer[] videoPlayers =
+            effect.GetComponentsInChildren<VideoPlayer>(
+                true
+            );
+
+        for (
+            int i = 0;
+            i < videoPlayers.Length;
+            i++
+        )
+        {
+            VideoPlayer videoPlayer =
+                videoPlayers[i];
+
+            if (videoPlayer == null)
+            {
+                continue;
+            }
+
+            videoPlayer.Stop();
+
+            videoPlayer.time =
+                0f;
+
+            videoPlayer.Play();
+        }
+    }
+
+
+    //=========================================================
+    // PLAY PARTICLE EFFECTS
+    //=========================================================
+
+    private void PlayParticleEffects(
+        GameObject effect
+    )
+    {
+        if (effect == null)
+        {
+            return;
+        }
+
+        ParticleSystem[] particles =
+            effect.GetComponentsInChildren<ParticleSystem>(
+                true
+            );
+
+        for (
+            int i = 0;
+            i < particles.Length;
+            i++
+        )
+        {
+            if (particles[i] == null)
+            {
+                continue;
+            }
+
+            particles[i].Clear(true);
+
+            particles[i].Play(true);
+        }
+    }
+
+
+    //=========================================================
+    // REMOVE SPEED EFFECT - CAR SMOKE
     //=========================================================
 
     private void RemoveSpeedEffect()
@@ -1026,89 +1315,89 @@ public class PhotonController : MonoBehaviour
     //=========================================================
 
     private void HitTrafficVehicle(
-    TrafficVehicle traffic
-)
-{
-    if (traffic == null)
-    {
-        return;
-    }
-
-    //=====================================================
-    // ĐÃ BỊ PHOTON HẤT
-    //=====================================================
-
-    if (traffic.IsKnockedByPhoton)
-    {
-        return;
-    }
-
-    //=====================================================
-    // COOLDOWN
-    //=====================================================
-
-    int id =
-        traffic.gameObject.GetInstanceID();
-
-    if (
-        hitCooldowns.TryGetValue(
-            id,
-            out float lastHit
-        )
+        TrafficVehicle traffic
     )
     {
-        if (
-            Time.time -
-            lastHit <
-            hitCooldown
-        )
+        if (traffic == null)
         {
             return;
         }
+
+        //=====================================================
+        // ĐÃ BỊ PHOTON HẤT
+        //=====================================================
+
+        if (traffic.IsKnockedByPhoton)
+        {
+            return;
+        }
+
+        //=====================================================
+        // COOLDOWN
+        //=====================================================
+
+        int id =
+            traffic.gameObject.GetInstanceID();
+
+        if (
+            hitCooldowns.TryGetValue(
+                id,
+                out float lastHit
+            )
+        )
+        {
+            if (
+                Time.time -
+                lastHit <
+                hitCooldown
+            )
+            {
+                return;
+            }
+        }
+
+        hitCooldowns[id] =
+            Time.time;
+
+        //=====================================================
+        // FORCE
+        //=====================================================
+
+        Vector3 force =
+            CalculatePhotonHitForce();
+
+        //=====================================================
+        // VFX
+        //=====================================================
+
+        SpawnHitEffect(
+            traffic.gameObject
+        );
+
+        //=====================================================
+        // AUDIO
+        //=====================================================
+
+        PlayPhotonAudio(
+            photonHitClip,
+            photonHitVolume
+        );
+
+        //=====================================================
+        // APPLY
+        //=====================================================
+
+        traffic.ApplyPhotonKnockback(
+            force
+        );
+
+        Debug.Log(
+            "[PhotonController] Photon HIT: " +
+            traffic.gameObject.name +
+            " | Force = " +
+            force
+        );
     }
-
-    hitCooldowns[id] =
-        Time.time;
-
-    //=====================================================
-    // FORCE
-    //=====================================================
-
-    Vector3 force =
-        CalculatePhotonHitForce();
-
-    //=====================================================
-    // VFX
-    //=====================================================
-
-    SpawnHitEffect(
-        traffic.gameObject
-    );
-
-    //=====================================================
-    // AUDIO
-    //=====================================================
-
-    PlayPhotonAudio(
-        photonHitClip,
-        photonHitVolume
-    );
-
-    //=====================================================
-    // APPLY
-    //=====================================================
-
-    traffic.ApplyPhotonKnockback(
-        force
-    );
-
-    Debug.Log(
-        "[PhotonController] Photon HIT: " +
-        traffic.gameObject.name +
-        " | Force = " +
-        force
-    );
-}
 
 
     //=========================================================
@@ -1133,7 +1422,6 @@ public class PhotonController : MonoBehaviour
             photonHitVolume
         );
 
-
         //=====================================================
         // FIND RIGIDBODY
         //=====================================================
@@ -1153,14 +1441,12 @@ public class PhotonController : MonoBehaviour
                 obj.GetComponentInChildren<Rigidbody>();
         }
 
-
         //=====================================================
         // FORCE
         //=====================================================
 
         Vector3 force =
             CalculatePhotonHitForce();
-
 
         //=====================================================
         // APPLY
@@ -1257,7 +1543,6 @@ public class PhotonController : MonoBehaviour
 
         forward.Normalize();
 
-
         //=====================================================
         // SIDE
         //=====================================================
@@ -1279,7 +1564,6 @@ public class PhotonController : MonoBehaviour
 
         right.Normalize();
 
-
         //=====================================================
         // RANDOM SIDE
         //=====================================================
@@ -1289,7 +1573,6 @@ public class PhotonController : MonoBehaviour
                 -photonSideRandomForce,
                 photonSideRandomForce
             );
-
 
         //=====================================================
         // FORCE
@@ -1307,7 +1590,6 @@ public class PhotonController : MonoBehaviour
             Vector3.up *
             photonUpwardForce;
 
-
         //=====================================================
         // NORMALIZE
         //=====================================================
@@ -1322,7 +1604,6 @@ public class PhotonController : MonoBehaviour
         }
 
         direction.Normalize();
-
 
         //=====================================================
         // FINAL
@@ -1505,22 +1786,28 @@ public class PhotonController : MonoBehaviour
             volume
         );
     }
+
+
     //=========================================================
-// PUBLIC HIT OBSTACLE
-//=========================================================
+    // PUBLIC HIT OBSTACLE
+    //=========================================================
 
-public void HitObstacle(GameObject obj)
-{
-    if (!isPhotonActive)
+    public void HitObstacle(
+        GameObject obj
+    )
     {
-        return;
-    }
+        if (!isPhotonActive)
+        {
+            return;
+        }
 
-    if (obj == null)
-    {
-        return;
-    }
+        if (obj == null)
+        {
+            return;
+        }
 
-    ProcessPhotonHit(obj);
-}
+        ProcessPhotonHit(
+            obj
+        );
+    }
 }
