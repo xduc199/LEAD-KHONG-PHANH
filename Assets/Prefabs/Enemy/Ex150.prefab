@@ -2390,7 +2390,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1171983653033419753}
@@ -2549,6 +2549,12 @@ MonoBehaviour:
   engineMinDistance: 5
   engineMaxDistance: 45
   engineLoop: 1
+  playerForwardKnockbackVelocity: 28
+  playerUpwardKnockbackVelocity: 18
+  playerWheelieAngularVelocity: 18
+  playerSpinAngularVelocity: 22
+  playerYawAngularVelocity: 4
+  playerKnockbackGameOverDelay: 1.25
 --- !u!1 &5424784138453935103
 GameObject:
   m_ObjectHideFlags: 0

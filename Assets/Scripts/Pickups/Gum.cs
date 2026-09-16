@@ -48,6 +48,10 @@ public class Gum : MonoBehaviour
         SetupCollider();
     }
 
+    //=========================================================
+    // START
+    //=========================================================
+
     private void Start()
     {
         startPosition = transform.position;
@@ -60,22 +64,27 @@ public class Gum : MonoBehaviour
     private void Update()
     {
         // Rotate
-        transform.Rotate(
-            0f,
-            rotateSpeed * Time.deltaTime,
-            0f,
-            Space.World
-        );
+        if (rotateSpeed > 0f)
+        {
+            transform.Rotate(
+                0f,
+                rotateSpeed * Time.deltaTime,
+                0f,
+                Space.World
+            );
+        }
 
         // Float
-        float offset =
-            Mathf.Sin(
-                Time.time * floatSpeed
-            ) * floatAmplitude;
+        if (floatAmplitude > 0f && floatSpeed > 0f)
+        {
+            float offset =
+                Mathf.Sin(Time.time * floatSpeed) *
+                floatAmplitude;
 
-        transform.position =
-            startPosition +
-            Vector3.up * offset;
+            transform.position =
+                startPosition +
+                Vector3.up * offset;
+        }
     }
 
     //=========================================================
@@ -84,19 +93,15 @@ public class Gum : MonoBehaviour
 
     private void SetupCollider()
     {
-        gumCollider =
-            GetComponent<SphereCollider>();
+        gumCollider = GetComponent<SphereCollider>();
 
         if (gumCollider == null)
         {
-            gumCollider =
-                gameObject.AddComponent<SphereCollider>();
+            gumCollider = gameObject.AddComponent<SphereCollider>();
         }
 
         gumCollider.isTrigger = true;
-
-        gumCollider.radius =
-            collectRadius;
+        gumCollider.radius = collectRadius;
     }
 
     //=========================================================
@@ -123,9 +128,10 @@ public class Gum : MonoBehaviour
         if (collected)
             return;
 
+        // Đánh dấu ngay lập tức để tránh collect nhiều lần
         collected = true;
 
-        // Disable collider immediately
+        // Tắt collider ngay
         if (gumCollider != null)
         {
             gumCollider.enabled = false;
@@ -135,7 +141,7 @@ public class Gum : MonoBehaviour
         // GUM EFFECT
         //=====================================================
 
-        ApplyGumEffect();
+        ActivateGum();
 
         //=====================================================
         // SOUND
@@ -158,49 +164,21 @@ public class Gum : MonoBehaviour
     }
 
     //=========================================================
-    // GUM EFFECT
+    // ACTIVATE GUM
     //=========================================================
 
-    private void ApplyGumEffect()
+    private void ActivateGum()
     {
-        PlayerController player =
-            FindPlayerController();
-
-        if (player == null)
+        if (ItemManager.Instance == null)
         {
             Debug.LogWarning(
-                "[Gum] Không tìm thấy PlayerController."
+                "[Gum] ItemManager.Instance chưa tồn tại."
             );
 
             return;
         }
 
-        /*
-         * Nếu PlayerController hiện tại của bạn
-         * có hệ thống boost Coffee cũ thì phần này
-         * sẽ gọi qua hàm tương ứng.
-         *
-         * Nếu chưa có hàm Gum riêng, tạm thời
-         * Gum chỉ thực hiện pickup + sound.
-         */
-
-        // Có thể mở rộng tại đây:
-        // player.ActivateGumBoost();
-    }
-
-    //=========================================================
-    // FIND PLAYER
-    //=========================================================
-
-    private PlayerController FindPlayerController()
-    {
-        GameObject player =
-            GameObject.FindGameObjectWithTag("Player");
-
-        if (player == null)
-            return null;
-
-        return player.GetComponent<PlayerController>();
+        ItemManager.Instance.ActivateGum();
     }
 
     //=========================================================
@@ -213,20 +191,15 @@ public class Gum : MonoBehaviour
             return;
 
         GameObject audioObject =
-            new GameObject(
-                "GumCollectAudio"
-            );
+            new GameObject("GumCollectAudio");
 
         AudioSource audioSource =
             audioObject.AddComponent<AudioSource>();
 
-        audioSource.clip =
-            collectSound;
+        audioSource.clip = collectSound;
+        audioSource.volume = collectVolume;
 
-        audioSource.volume =
-            collectVolume;
-
-        // 2D
+        // 2D audio
         audioSource.spatialBlend = 0f;
 
         audioSource.playOnAwake = false;
@@ -234,7 +207,6 @@ public class Gum : MonoBehaviour
 
         audioSource.dopplerLevel = 0f;
         audioSource.pitch = 1f;
-
         audioSource.panStereo = 0f;
 
         audioSource.Play();
@@ -258,27 +230,45 @@ public class Gum : MonoBehaviour
     }
 
     //=========================================================
+    // RESET
+    //=========================================================
+
+    public void ResetGum()
+    {
+        collected = false;
+
+        if (gumCollider != null)
+        {
+            gumCollider.enabled = true;
+        }
+
+        gameObject.SetActive(true);
+        startPosition = transform.position;
+    }
+
+    //=========================================================
+    // STATUS
+    //=========================================================
+
+    public bool IsCollected()
+    {
+        return collected;
+    }
+
+    //=========================================================
     // VALIDATE
     //=========================================================
 
     private void OnValidate()
     {
-        if (rotateSpeed < 0f)
-            rotateSpeed = 0f;
+        rotateSpeed = Mathf.Max(0f, rotateSpeed);
 
-        if (floatAmplitude < 0f)
-            floatAmplitude = 0f;
+        floatAmplitude = Mathf.Max(0f, floatAmplitude);
 
-        if (floatSpeed < 0f)
-            floatSpeed = 0f;
+        floatSpeed = Mathf.Max(0f, floatSpeed);
 
-        if (collectRadius < 0.1f)
-            collectRadius = 0.1f;
+        collectRadius = Mathf.Max(0.1f, collectRadius);
 
-        if (collectVolume < 0f)
-            collectVolume = 0f;
-
-        if (collectVolume > 1f)
-            collectVolume = 1f;
+        collectVolume = Mathf.Clamp01(collectVolume);
     }
 }

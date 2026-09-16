@@ -2,52 +2,102 @@ using UnityEngine;
 
 public class MagnetController : MonoBehaviour
 {
+    //=============================================================
+    // MAGNET SETTINGS
+    //=============================================================
+
     [Header("Magnet Settings")]
-    [SerializeField] private float duration = 8f;
 
-    [SerializeField] private float magnetRadius = 8f;
+    [SerializeField]
+    private float duration = 8f;
 
-    [SerializeField] private float pullSpeed = 30f;
+    [SerializeField]
+    private float magnetRadius = 8f;
 
-    [SerializeField] private float collectDistance = 1f;
+    [SerializeField]
+    private float pullSpeed = 30f;
 
-    [SerializeField] private bool resetDurationWhenCollected = true;
+    [SerializeField]
+    private float collectDistance = 1f;
+
+    [SerializeField]
+    private bool resetDurationWhenCollected = true;
+
+
+    //=============================================================
+    // MAGNET EFFECT
+    //=============================================================
 
     [Header("Magnet Effect")]
-    [SerializeField] private GameObject magnetEffectPrefab;
 
-    [SerializeField] private Vector3 effectLocalPosition =
-        Vector3.zero;
+    [SerializeField]
+    private GameObject magnetEffectPrefab;
 
-    [SerializeField] private Vector3 effectLocalRotation =
-        Vector3.zero;
+    [SerializeField]
+    private Vector3 effectLocalPosition = Vector3.zero;
 
-    [SerializeField] private Vector3 effectLocalScale =
-        Vector3.one;
+    [SerializeField]
+    private Vector3 effectLocalRotation = Vector3.zero;
+
+    [SerializeField]
+    private Vector3 effectLocalScale = Vector3.one;
+
+
+    //=============================================================
+    // AUDIO - PICKUP
+    //=============================================================
 
     [Header("Audio - Pickup")]
-    [SerializeField] private AudioClip pickupSound;
+
+    [SerializeField]
+    private AudioClip pickupSound;
 
     [SerializeField]
     [Range(0f, 1f)]
     private float pickupVolume = 1f;
 
+
+    //=============================================================
+    // AUDIO - ACTIVE
+    //=============================================================
+
     [Header("Audio - Active")]
-    [SerializeField] private AudioClip activeSound;
+
+    [SerializeField]
+    private AudioClip activeSound;
 
     [SerializeField]
     [Range(0f, 1f)]
     private float activeVolume = 0.7f;
 
+
+    //=============================================================
+    // AUDIO SETTINGS
+    //=============================================================
+
     [Header("Audio Settings")]
-    [SerializeField] private bool use2DAudio = true;
+
+    [SerializeField]
+    private bool use2DAudio = true;
 
     [SerializeField]
     [Range(0f, 1f)]
     private float spatialBlend = 0f;
 
+
+    //=============================================================
+    // DEBUG
+    //=============================================================
+
     [Header("Debug")]
-    [SerializeField] private bool showDebugLogs = false;
+
+    [SerializeField]
+    private bool showDebugLogs = false;
+
+
+    //=============================================================
+    // RUNTIME
+    //=============================================================
 
     private GameObject activeEffect;
 
@@ -57,15 +107,45 @@ public class MagnetController : MonoBehaviour
 
     private bool isActive;
 
+
+    //=============================================================
+    // RUNTIME - UPGRADE VALUES
+    //=============================================================
+
+    private float activeDuration;
+
+    private float activeMagnetRadius;
+
+    private float activePullSpeed;
+
+    private float activeCollectDistance;
+
+
+    //=============================================================
+    // AWAKE
+    //=============================================================
+
     private void Awake()
     {
         playerTransform = transform;
+
+        activeDuration = duration;
+        activeMagnetRadius = magnetRadius;
+        activePullSpeed = pullSpeed;
+        activeCollectDistance = collectDistance;
     }
+
+
+    //=============================================================
+    // UPDATE
+    //=============================================================
 
     private void Update()
     {
         if (!isActive)
+        {
             return;
+        }
 
         remainingTime -= Time.deltaTime;
 
@@ -78,21 +158,160 @@ public class MagnetController : MonoBehaviour
         AttractCoins();
     }
 
+
+    //=============================================================
+    // APPLY MAGNET UPGRADE
+    //=============================================================
+
+    /// <summary>
+    /// Lấy toàn bộ thông số Magnet từ ItemUpgradeManager.
+    ///
+    /// Data Model mới:
+    ///
+    /// duration
+    /// magnetRadius
+    /// pullSpeed
+    /// collectDistance
+    ///
+    /// Các giá trị trong ItemUpgradeData là giá trị gameplay
+    /// trực tiếp, KHÔNG phải multiplier.
+    /// </summary>
+    private void ApplyMagnetUpgradeValues()
+    {
+        //=========================================================
+        // FALLBACK VỀ INSPECTOR
+        //=========================================================
+
+        activeDuration = duration;
+        activeMagnetRadius = magnetRadius;
+        activePullSpeed = pullSpeed;
+        activeCollectDistance = collectDistance;
+
+
+        //=========================================================
+        // KIỂM TRA UPGRADE MANAGER
+        //=========================================================
+
+        ItemUpgradeManager manager =
+            ItemUpgradeManager.Instance;
+
+        if (manager == null)
+        {
+            return;
+        }
+
+
+        //=========================================================
+        // LẤY DATA LEVEL HIỆN TẠI
+        //=========================================================
+
+        ItemUpgradeLevel levelData =
+            manager.GetCurrentLevelData(
+                UpgradeItemType.Magnet
+            );
+
+        if (levelData == null)
+        {
+            return;
+        }
+
+
+        //=========================================================
+        // APPLY DURATION
+        //=========================================================
+
+        activeDuration =
+            Mathf.Max(
+                0.1f,
+                levelData.duration
+            );
+
+
+        //=========================================================
+        // APPLY MAGNET RADIUS
+        //=========================================================
+
+        activeMagnetRadius =
+            Mathf.Max(
+                0.5f,
+                levelData.magnetRadius
+            );
+
+
+        //=========================================================
+        // APPLY PULL SPEED
+        //=========================================================
+
+        activePullSpeed =
+            Mathf.Max(
+                0f,
+                levelData.pullSpeed
+            );
+
+
+        //=========================================================
+        // APPLY COLLECT DISTANCE
+        //=========================================================
+
+        activeCollectDistance =
+            Mathf.Max(
+                0.1f,
+                levelData.collectDistance
+            );
+
+
+        //=========================================================
+        // DEBUG
+        //=========================================================
+
+        if (showDebugLogs)
+        {
+            Debug.Log(
+                "[MagnetController] Upgrade Applied | " +
+                "Level=" + levelData.level +
+                " | Duration=" + activeDuration +
+                " | Radius=" + activeMagnetRadius +
+                " | PullSpeed=" + activePullSpeed +
+                " | CollectDistance=" + activeCollectDistance,
+                this
+            );
+        }
+    }
+
+
     //=============================================================
     // ACTIVATE
     //=============================================================
 
     public void Activate()
     {
-        Activate(duration);
+        ApplyMagnetUpgradeValues();
+
+        Activate(
+            activeDuration
+        );
     }
+
+
+    //=============================================================
+    // ACTIVATE - CUSTOM DURATION
+    //=============================================================
 
     public void Activate(float customDuration)
     {
         if (customDuration <= 0f)
-            customDuration = duration;
+        {
+            customDuration =
+                activeDuration > 0f
+                    ? activeDuration
+                    : duration;
+        }
 
-        // Nếu Magnet đang hoạt động
+
+        //=========================================================
+        // MAGNET ĐANG ACTIVE
+        //=========================================================
+
         if (isActive)
         {
             if (resetDurationWhenCollected)
@@ -103,29 +322,60 @@ public class MagnetController : MonoBehaviour
             return;
         }
 
+
+        //=========================================================
+        // ACTIVATE
+        //=========================================================
+
         isActive = true;
 
         remainingTime = customDuration;
 
+
+        //=========================================================
+        // CREATE EFFECT
+        //=========================================================
+
         CreateEffect();
+
+
+        //=========================================================
+        // PICKUP SOUND
+        //=========================================================
 
         Play2DSound(
             pickupSound,
             pickupVolume
         );
 
+
+        //=========================================================
+        // ACTIVE SOUND
+        //=========================================================
+
         Play2DSound(
             activeSound,
             activeVolume
         );
 
+
+        //=========================================================
+        // DEBUG
+        //=========================================================
+
         if (showDebugLogs)
         {
             Debug.Log(
-                "[MagnetController] Magnet ACTIVATED."
+                "[MagnetController] Magnet ACTIVATED | " +
+                "Duration=" + customDuration +
+                " | Radius=" + activeMagnetRadius +
+                " | PullSpeed=" + activePullSpeed +
+                " | CollectDistance=" + activeCollectDistance,
+                this
             );
         }
     }
+
 
     //=============================================================
     // ATTRACT COINS
@@ -136,33 +386,48 @@ public class MagnetController : MonoBehaviour
         Collider[] colliders =
             Physics.OverlapSphere(
                 playerTransform.position,
-                magnetRadius,
+                activeMagnetRadius,
                 ~0,
                 QueryTriggerInteraction.Collide
             );
 
+
         for (int i = 0; i < colliders.Length; i++)
         {
-            if (colliders[i] == null)
+            Collider collider = colliders[i];
+
+            if (collider == null)
+            {
                 continue;
+            }
+
 
             Coin coin =
-                colliders[i].GetComponent<Coin>();
+                collider.GetComponent<Coin>();
+
 
             if (coin == null)
             {
                 coin =
-                    colliders[i].GetComponentInParent<Coin>();
+                    collider.GetComponentInParent<Coin>();
             }
 
+
             if (coin == null)
+            {
                 continue;
+            }
+
 
             if (!coin.isActiveAndEnabled)
+            {
                 continue;
+            }
+
 
             Transform coinTransform =
                 coin.transform;
+
 
             float distance =
                 Vector3.Distance(
@@ -170,20 +435,23 @@ public class MagnetController : MonoBehaviour
                     playerTransform.position
                 );
 
-            if (distance <= collectDistance)
+
+            if (distance <= activeCollectDistance)
             {
                 coin.CollectFromMagnet();
                 continue;
             }
 
+
             coinTransform.position =
                 Vector3.MoveTowards(
                     coinTransform.position,
                     playerTransform.position,
-                    pullSpeed * Time.deltaTime
+                    activePullSpeed * Time.deltaTime
                 );
         }
     }
+
 
     //=============================================================
     // EFFECT
@@ -192,32 +460,42 @@ public class MagnetController : MonoBehaviour
     private void CreateEffect()
     {
         if (magnetEffectPrefab == null)
+        {
             return;
+        }
+
 
         if (activeEffect != null)
         {
             Destroy(activeEffect);
+
             activeEffect = null;
         }
+
 
         activeEffect =
             Instantiate(
                 magnetEffectPrefab
             );
 
+
         activeEffect.transform.SetParent(
             transform
         );
 
+
         activeEffect.transform.localPosition =
             effectLocalPosition;
+
 
         activeEffect.transform.localEulerAngles =
             effectLocalRotation;
 
+
         activeEffect.transform.localScale =
             effectLocalScale;
     }
+
 
     //=============================================================
     // DEACTIVATE
@@ -229,19 +507,24 @@ public class MagnetController : MonoBehaviour
 
         remainingTime = 0f;
 
+
         if (activeEffect != null)
         {
             Destroy(activeEffect);
+
             activeEffect = null;
         }
+
 
         if (showDebugLogs)
         {
             Debug.Log(
-                "[MagnetController] Magnet expired."
+                "[MagnetController] Magnet expired.",
+                this
             );
         }
     }
+
 
     //=============================================================
     // AUDIO
@@ -253,44 +536,61 @@ public class MagnetController : MonoBehaviour
     )
     {
         if (clip == null)
+        {
             return;
+        }
+
 
         GameObject audioObject =
             new GameObject(
                 "MagnetAudio"
             );
 
+
         AudioSource source =
             audioObject.AddComponent<AudioSource>();
 
-        source.clip = clip;
 
-        source.volume = volume;
+        source.clip =
+            clip;
 
-        source.playOnAwake = false;
+        source.volume =
+            volume;
 
-        source.loop = false;
+        source.playOnAwake =
+            false;
 
-        source.dopplerLevel = 0f;
+        source.loop =
+            false;
 
-        source.pitch = 1f;
+        source.dopplerLevel =
+            0f;
+
+        source.pitch =
+            1f;
+
 
         if (use2DAudio)
         {
-            source.spatialBlend = 0f;
+            source.spatialBlend =
+                0f;
         }
         else
         {
-            source.spatialBlend = spatialBlend;
+            source.spatialBlend =
+                spatialBlend;
         }
 
+
         source.Play();
+
 
         Destroy(
             audioObject,
             clip.length + 0.1f
         );
     }
+
 
     //=============================================================
     // PUBLIC
@@ -301,6 +601,7 @@ public class MagnetController : MonoBehaviour
         return isActive;
     }
 
+
     public float GetRemainingTime()
     {
         return Mathf.Max(
@@ -308,6 +609,7 @@ public class MagnetController : MonoBehaviour
             0f
         );
     }
+
 
     //=============================================================
     // GIZMOS
@@ -321,6 +623,7 @@ public class MagnetController : MonoBehaviour
         );
     }
 
+
     //=============================================================
     // VALIDATE
     //=============================================================
@@ -328,27 +631,44 @@ public class MagnetController : MonoBehaviour
     private void OnValidate()
     {
         if (duration < 0.1f)
+        {
             duration = 0.1f;
+        }
+
 
         if (magnetRadius < 0.5f)
+        {
             magnetRadius = 0.5f;
+        }
+
 
         if (pullSpeed < 1f)
+        {
             pullSpeed = 1f;
+        }
+
 
         if (collectDistance < 0.1f)
+        {
             collectDistance = 0.1f;
+        }
 
-        pickupVolume = Mathf.Clamp01(
-            pickupVolume
-        );
 
-        activeVolume = Mathf.Clamp01(
-            activeVolume
-        );
+        pickupVolume =
+            Mathf.Clamp01(
+                pickupVolume
+            );
 
-        spatialBlend = Mathf.Clamp01(
-            spatialBlend
-        );
+
+        activeVolume =
+            Mathf.Clamp01(
+                activeVolume
+            );
+
+
+        spatialBlend =
+            Mathf.Clamp01(
+                spatialBlend
+            );
     }
 }

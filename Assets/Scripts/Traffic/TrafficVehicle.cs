@@ -1,607 +1,797 @@
-    using System.Collections;
-    using UnityEngine;
+using System.Collections;
+using UnityEngine;
 
-    public class TrafficVehicle : MonoBehaviour
+public class TrafficVehicle : MonoBehaviour
+{
+    //=========================================================
+    // SPEED
+    //=========================================================
+
+    [Header("Speed")]
+    [SerializeField] private float moveSpeed = 10f;
+
+    [SerializeField] private float minimumSpeed = 5f;
+
+    [Tooltip("Traffic không chạy nhanh hơn Player quá nhiều.")]
+    [SerializeField] private float playerSpeedMargin = 1f;
+
+
+    //=========================================================
+    // MOVEMENT
+    //=========================================================
+
+    [Header("Movement")]
+    [SerializeField] private bool moveForward = true;
+
+    [Tooltip("Độ cao Y của Traffic Vehicle.")]
+    [SerializeField] private float vehicleHeightY = 0f;
+
+
+    //=========================================================
+    // PLAYER SPEED
+    //=========================================================
+
+    private Transform playerTransform;
+
+    private float estimatedPlayerSpeed = 15f;
+
+    private float lastPlayerZ;
+
+    private bool playerSpeedInitialized;
+
+
+    //=========================================================
+    // SPEED STATE
+    //=========================================================
+
+    private float baseSpeed;
+
+    private bool temporarySpeedActive;
+
+    private float temporarySpeed;
+
+
+    //=========================================================
+    // PHOTON / DEATH
+    //=========================================================
+
+    [Header("Vehicle Knockback")]
+
+    [SerializeField]
+    private float knockbackDuration = 2.5f;
+
+    [SerializeField]
+    private float destroyDelay = 0.25f;
+
+    [SerializeField]
+    private float spinForce = 18f;
+
+
+    [Tooltip("Khi xe bị hất, tắt Collider ngay lập tức.")]
+    [SerializeField]
+    private bool disableCollidersWhenKnocked = true;
+
+
+    //=========================================================
+    // PHOTON KNOCKBACK SETTINGS
+    //=========================================================
+
+    [Header("Photon Knockback")]
+
+    [Tooltip(
+        "Vận tốc bay lên tối thiểu khi bị Photon hất."
+    )]
+    [SerializeField]
+    private float photonUpwardVelocity = 20f;
+
+    [Tooltip(
+        "Vận tốc bay về phía trước tối thiểu khi bị Photon hất."
+    )]
+    [SerializeField]
+    private float photonForwardVelocity = 12f;
+
+    [Tooltip(
+        "Giới hạn độ lệch ngang khi bị Photon hất."
+    )]
+    [SerializeField]
+    private float photonSideVelocity = 4f;
+
+
+    private bool isKnocked;
+
+    private Rigidbody rb;
+
+    private Collider[] vehicleColliders;
+
+    private Coroutine knockbackRoutine;
+
+
+    //=========================================================
+    // PUBLIC
+    //=========================================================
+
+    public float MoveSpeed
     {
-        //=========================================================
-        // SPEED
-        //=========================================================
-
-        [Header("Speed")]
-        [SerializeField] private float moveSpeed = 10f;
-
-        [SerializeField] private float minimumSpeed = 5f;
-
-        [Tooltip("Traffic không chạy nhanh hơn Player quá nhiều.")]
-        [SerializeField] private float playerSpeedMargin = 1f;
-
-
-        //=========================================================
-        // MOVEMENT
-        //=========================================================
-
-        [Header("Movement")]
-        [SerializeField] private bool moveForward = true;
-
-
-        //=========================================================
-        // PLAYER SPEED
-        //=========================================================
-
-        private Transform playerTransform;
-
-        private float estimatedPlayerSpeed = 15f;
-
-        private float lastPlayerZ;
-
-        private bool playerSpeedInitialized;
-
-
-        //=========================================================
-        // SPEED STATE
-        //=========================================================
-
-        private float baseSpeed;
-
-        private bool temporarySpeedActive;
-
-        private float temporarySpeed;
-
-
-        //=========================================================
-        // PHOTON / DEATH
-        //=========================================================
-
-        [Header("Vehicle Knockback")]
-
-        [SerializeField]
-        private float knockbackDuration = 2.5f;
-
-        [SerializeField]
-        private float destroyDelay = 0.25f;
-
-        [SerializeField]
-        private float spinForce = 18f;
-
-
-        [Tooltip("Khi xe bị hất, tắt Collider ngay lập tức.")]
-        [SerializeField]
-        private bool disableCollidersWhenKnocked = true;
-
-
-        private bool isKnocked;
-
-        private Rigidbody rb;
-
-        private Collider[] vehicleColliders;
-
-        private Coroutine knockbackRoutine;
-
-
-        //=========================================================
-        // PUBLIC
-        //=========================================================
-
-        public float MoveSpeed
+        get
         {
-            get
-            {
-                return moveSpeed;
-            }
+            return moveSpeed;
         }
+    }
 
 
-        public float CurrentSpeed
+    public float CurrentSpeed
+    {
+        get
         {
-            get
-            {
-                return moveSpeed;
-            }
+            return moveSpeed;
         }
+    }
 
 
-        public float BaseSpeed
+    public float BaseSpeed
+    {
+        get
         {
-            get
-            {
-                return baseSpeed;
-            }
+            return baseSpeed;
         }
+    }
 
 
-        public int TravelDirection
+    public int TravelDirection
+    {
+        get
         {
-            get
-            {
-                return moveForward
-                    ? 1
-                    : -1;
-            }
+            return moveForward
+                ? 1
+                : -1;
         }
+    }
 
 
-        public bool IsKnockedByPhoton
+    public bool IsKnockedByPhoton
+    {
+        get
         {
-            get
-            {
-                return isKnocked;
-            }
+            return isKnocked;
         }
+    }
 
 
-        public bool IsDead
+    public bool IsDead
+    {
+        get
         {
-            get
-            {
-                return isKnocked;
-            }
+            return isKnocked;
         }
+    }
 
 
-        //=========================================================
-        // AWAKE
-        //=========================================================
+    //=========================================================
+    // AWAKE
+    //=========================================================
 
-        private void Awake()
-        {
-            baseSpeed =
-                Mathf.Max(
-                    minimumSpeed,
-                    moveSpeed
-                );
-
-
-            rb =
-                GetComponent<Rigidbody>();
+    private void Awake()
+    {
+        baseSpeed =
+            Mathf.Max(
+                minimumSpeed,
+                moveSpeed
+            );
 
 
-            vehicleColliders =
-                GetComponentsInChildren<Collider>(
-                    true
-                );
+        //=====================================================
+        // VEHICLE HEIGHT
+        //=====================================================
+
+        Vector3 position =
+            transform.position;
+
+        position.y =
+            vehicleHeightY;
+
+        transform.position =
+            position;
 
 
-            FindPlayer();
-
-            PrepareRigidbody();
-        }
-
-
-        //=========================================================
-        // START
-        //=========================================================
-
-        private void Start()
-        {
-            FindPlayer();
-
-
-            if (playerTransform != null)
-            {
-                lastPlayerZ =
-                    playerTransform.position.z;
-
-                playerSpeedInitialized =
-                    true;
-            }
-        }
-
-
-        //=========================================================
-        // UPDATE
-        //=========================================================
-
-        private void Update()
-        {
-            if (isKnocked)
-                return;
-
-
-            if (playerTransform == null)
-            {
-                FindPlayer();
-            }
-
-
-            UpdatePlayerSpeedEstimate();
-
-            UpdateCurrentSpeed();
-
-            Move();
-        }
-
-
-        //=========================================================
+        //=====================================================
         // RIGIDBODY
-        //=========================================================
+        //=====================================================
 
-        private void PrepareRigidbody()
-        {
-            if (rb == null)
-                return;
+        rb =
+            GetComponent<Rigidbody>();
 
 
-            rb.isKinematic =
-                true;
+        //=====================================================
+        // COLLIDERS
+        //=====================================================
 
-            rb.useGravity =
-                false;
-        }
+        vehicleColliders =
+            GetComponentsInChildren<Collider>(
+                true
+            );
 
 
-        //=========================================================
+        //=====================================================
         // PLAYER
-        //=========================================================
+        //=====================================================
 
-        private void FindPlayer()
+        FindPlayer();
+
+
+        //=====================================================
+        // PREPARE PHYSICS
+        //=====================================================
+
+        PrepareRigidbody();
+    }
+
+
+    //=========================================================
+    // START
+    //=========================================================
+
+    private void Start()
+    {
+        FindPlayer();
+
+
+        if (playerTransform != null)
         {
-            if (playerTransform != null)
-                return;
-
-
-            GameObject player =
-                GameObject.FindGameObjectWithTag(
-                    "Player"
-                );
-
-
-            if (player == null)
-                return;
-
-
-            playerTransform =
-                player.transform;
-
-
             lastPlayerZ =
                 playerTransform.position.z;
-
 
             playerSpeedInitialized =
                 true;
         }
+    }
 
 
-        //=========================================================
-        // PLAYER SPEED ESTIMATION
-        //=========================================================
+    //=========================================================
+    // UPDATE
+    //=========================================================
 
-        private void UpdatePlayerSpeedEstimate()
+    private void Update()
+    {
+        if (isKnocked)
+            return;
+
+
+        if (playerTransform == null)
         {
-            if (playerTransform == null)
-                return;
+            FindPlayer();
+        }
 
 
-            float currentZ =
-                playerTransform.position.z;
+        UpdatePlayerSpeedEstimate();
+
+        UpdateCurrentSpeed();
+
+        Move();
+    }
 
 
-            if (!playerSpeedInitialized)
-            {
-                lastPlayerZ =
-                    currentZ;
+    //=========================================================
+    // RIGIDBODY
+    //=========================================================
 
-                playerSpeedInitialized =
-                    true;
-
-                return;
-            }
+    private void PrepareRigidbody()
+    {
+        if (rb == null)
+            return;
 
 
-            float delta =
-                currentZ -
-                lastPlayerZ;
+        rb.isKinematic =
+            true;
+
+        rb.useGravity =
+            false;
+    }
 
 
-            float measuredSpeed =
-                delta /
-                Mathf.Max(
-                    Time.deltaTime,
-                    0.001f
-                );
+    //=========================================================
+    // PLAYER
+    //=========================================================
+
+    private void FindPlayer()
+    {
+        if (playerTransform != null)
+            return;
 
 
-            if (
-                measuredSpeed > 0f &&
-                measuredSpeed < 60f
-            )
-            {
-                estimatedPlayerSpeed =
-                    Mathf.Lerp(
-                        estimatedPlayerSpeed,
-                        measuredSpeed,
-                        Time.deltaTime * 4f
-                    );
-            }
+        GameObject player =
+            GameObject.FindGameObjectWithTag(
+                "Player"
+            );
 
 
+        if (player == null)
+            return;
+
+
+        playerTransform =
+            player.transform;
+
+
+        lastPlayerZ =
+            playerTransform.position.z;
+
+
+        playerSpeedInitialized =
+            true;
+    }
+
+
+    //=========================================================
+    // PLAYER SPEED ESTIMATION
+    //=========================================================
+
+    private void UpdatePlayerSpeedEstimate()
+    {
+        if (playerTransform == null)
+            return;
+
+
+        float currentZ =
+            playerTransform.position.z;
+
+
+        if (!playerSpeedInitialized)
+        {
             lastPlayerZ =
                 currentZ;
-        }
 
-
-        //=========================================================
-        // SPEED UPDATE
-        //=========================================================
-
-        private void UpdateCurrentSpeed()
-        {
-            float targetSpeed =
-                baseSpeed;
-
-
-            if (temporarySpeedActive)
-            {
-                targetSpeed =
-                    temporarySpeed;
-            }
-
-
-            if (playerTransform != null)
-            {
-                float maximumAllowed =
-                    Mathf.Max(
-                        minimumSpeed,
-                        estimatedPlayerSpeed -
-                        playerSpeedMargin
-                    );
-
-
-                targetSpeed =
-                    Mathf.Min(
-                        targetSpeed,
-                        maximumAllowed
-                    );
-            }
-
-
-            moveSpeed =
-                Mathf.Max(
-                    minimumSpeed,
-                    targetSpeed
-                );
-        }
-
-
-        //=========================================================
-        // MOVE
-        //=========================================================
-
-        private void Move()
-        {
-            float direction =
-                moveForward
-                    ? 1f
-                    : -1f;
-
-
-            transform.position +=
-                Vector3.forward *
-                direction *
-                moveSpeed *
-                Time.deltaTime;
-        }
-
-
-        //=========================================================
-        // SET BASE SPEED
-        //=========================================================
-
-        public void SetMoveSpeed(
-            float speed
-        )
-        {
-            baseSpeed =
-                Mathf.Max(
-                    minimumSpeed,
-                    speed
-                );
-
-
-            if (!temporarySpeedActive)
-            {
-                moveSpeed =
-                    baseSpeed;
-            }
-        }
-
-
-        //=========================================================
-        // TEMPORARY SPEED
-        //=========================================================
-
-        public void SetTemporarySpeed(
-            float speed
-        )
-        {
-            temporarySpeed =
-                Mathf.Max(
-                    minimumSpeed,
-                    speed
-                );
-
-
-            temporarySpeedActive =
-                true;
-        }
-
-
-        //=========================================================
-        // RESTORE SPEED
-        //=========================================================
-
-        public void RestoreBaseSpeed()
-        {
-            temporarySpeedActive =
-                false;
-
-
-            temporarySpeed =
-                baseSpeed;
-
-
-            moveSpeed =
-                baseSpeed;
-        }
-
-
-        public float GetBaseSpeed()
-        {
-            return baseSpeed;
-        }
-
-
-        public float GetMoveSpeed()
-        {
-            return moveSpeed;
-        }
-
-
-        //=========================================================
-        // DIRECTION
-        //=========================================================
-
-        public void SetTravelDirection(
-            bool forward
-        )
-        {
-            moveForward =
-                forward;
-        }
-
-
-        public void SetTravelDirection(
-            int direction
-        )
-        {
-            moveForward =
-                direction >= 0;
-        }
-
-
-        //=========================================================
-        // KNOCKBACK
-        //=========================================================
-
-        public void ApplyPhotonKnockback(
-            Vector3 force
-        )
-        {
-            if (isKnocked)
-                return;
-
-
-            if (rb == null)
-            {
-                rb =
-                    GetComponent<Rigidbody>();
-            }
-
-
-            isKnocked =
+            playerSpeedInitialized =
                 true;
 
-
-            //=====================================================
-            // DỪNG TRAFFIC AI
-            //=====================================================
-
-            TrafficCarBehavior behavior =
-                GetComponent<TrafficCarBehavior>();
+            return;
+        }
 
 
-            if (behavior != null)
-            {
-                behavior.enabled =
-                    false;
-            }
+        float delta =
+            currentZ -
+            lastPlayerZ;
 
 
-            //=====================================================
-            // TẮT COLLIDER NGAY
-            //=====================================================
-
-            DisableVehicleColliders();
-
-
-            //=====================================================
-            // PHYSICS
-            //=====================================================
-
-            if (rb != null)
-            {
-                rb.isKinematic =
-                    false;
+        float measuredSpeed =
+            delta /
+            Mathf.Max(
+                Time.deltaTime,
+                0.001f
+            );
 
 
-                rb.useGravity =
-                    true;
-
-
-                rb.constraints =
-                    RigidbodyConstraints.None;
-
-
-                rb.linearDamping =
-                    0.8f;
-
-
-                rb.angularDamping =
-                    0.8f;
-
-
-                rb.linearVelocity =
-                    Vector3.zero;
-
-
-                rb.angularVelocity =
-                    Vector3.zero;
-
-
-                rb.AddForce(
-                    force,
-                    ForceMode.Impulse
-                );
-
-
-                rb.AddTorque(
-                    Random.insideUnitSphere *
-                    spinForce,
-                    ForceMode.Impulse
-                );
-            }
-
-
-            //=====================================================
-            // ROUTINE
-            //=====================================================
-
-            if (knockbackRoutine != null)
-            {
-                StopCoroutine(
-                    knockbackRoutine
-                );
-            }
-
-
-            knockbackRoutine =
-                StartCoroutine(
-                    KnockbackRoutine()
+        if (
+            measuredSpeed > 0f &&
+            measuredSpeed < 60f
+        )
+        {
+            estimatedPlayerSpeed =
+                Mathf.Lerp(
+                    estimatedPlayerSpeed,
+                    measuredSpeed,
+                    Time.deltaTime * 4f
                 );
         }
 
-        //=========================================================
-    // AMBULANCE KNOCKBACK
+
+        lastPlayerZ =
+            currentZ;
+    }
+
+
     //=========================================================
-    //
-    // Khác Photon:
-    // Ambulance cần hất Traffic BAY CAO lên trời.
-    //
-    // Không chỉ AddForce.
-    // Hàm này ép velocity trực tiếp để:
-    // - Không phụ thuộc Rigidbody.mass
-    // - Không bị lực ngang lấn át
-    // - Y chắc chắn đủ lớn
+    // SPEED UPDATE
+    //=========================================================
+
+    private void UpdateCurrentSpeed()
+    {
+        float targetSpeed =
+            baseSpeed;
+
+
+        if (temporarySpeedActive)
+        {
+            targetSpeed =
+                temporarySpeed;
+        }
+
+
+        if (playerTransform != null)
+        {
+            float maximumAllowed =
+                Mathf.Max(
+                    minimumSpeed,
+                    estimatedPlayerSpeed -
+                    playerSpeedMargin
+                );
+
+
+            targetSpeed =
+                Mathf.Min(
+                    targetSpeed,
+                    maximumAllowed
+                );
+        }
+
+
+        moveSpeed =
+            Mathf.Max(
+                minimumSpeed,
+                targetSpeed
+            );
+    }
+
+
+    //=========================================================
+    // MOVE
+    //=========================================================
+
+    private void Move()
+    {
+        float direction =
+            moveForward
+                ? 1f
+                : -1f;
+
+
+        transform.position +=
+            Vector3.forward *
+            direction *
+            moveSpeed *
+            Time.deltaTime;
+    }
+
+
+    //=========================================================
+    // SET BASE SPEED
+    //=========================================================
+
+    public void SetMoveSpeed(
+        float speed
+    )
+    {
+        baseSpeed =
+            Mathf.Max(
+                minimumSpeed,
+                speed
+            );
+
+
+        if (!temporarySpeedActive)
+        {
+            moveSpeed =
+                baseSpeed;
+        }
+    }
+
+
+    //=========================================================
+    // TEMPORARY SPEED
+    //=========================================================
+
+    public void SetTemporarySpeed(
+        float speed
+    )
+    {
+        temporarySpeed =
+            Mathf.Max(
+                minimumSpeed,
+                speed
+            );
+
+
+        temporarySpeedActive =
+            true;
+    }
+
+
+    //=========================================================
+    // RESTORE SPEED
+    //=========================================================
+
+    public void RestoreBaseSpeed()
+    {
+        temporarySpeedActive =
+            false;
+
+
+        temporarySpeed =
+            baseSpeed;
+
+
+        moveSpeed =
+            baseSpeed;
+    }
+
+
+    public float GetBaseSpeed()
+    {
+        return baseSpeed;
+    }
+
+
+    public float GetMoveSpeed()
+    {
+        return moveSpeed;
+    }
+
+
+    //=========================================================
+    // DIRECTION
+    //=========================================================
+
+    public void SetTravelDirection(
+        bool forward
+    )
+    {
+        moveForward =
+            forward;
+    }
+
+
+    public void SetTravelDirection(
+        int direction
+    )
+    {
+        moveForward =
+            direction >= 0;
+    }
+
+
+    //=========================================================
+    // PHOTON KNOCKBACK
+    //=========================================================
+
+    public void ApplyPhotonKnockback(
+        Vector3 force
+    )
+    {
+        if (isKnocked)
+            return;
+
+
+        //=====================================================
+        // RIGIDBODY
+        //=====================================================
+
+        if (rb == null)
+        {
+            rb =
+                GetComponent<Rigidbody>();
+        }
+
+
+        if (rb == null)
+        {
+            rb =
+                gameObject.AddComponent<Rigidbody>();
+        }
+
+
+        //=====================================================
+        // STATE
+        //=====================================================
+
+        isKnocked =
+            true;
+
+
+        //=====================================================
+        // DỪNG TRAFFIC AI
+        //=====================================================
+
+        TrafficCarBehavior behavior =
+            GetComponent<TrafficCarBehavior>();
+
+
+        if (behavior != null)
+        {
+            behavior.enabled =
+                false;
+        }
+
+
+        //=====================================================
+        // TẮT COLLIDER
+        //=====================================================
+
+        DisableVehicleColliders();
+
+
+        //=====================================================
+        // PHYSICS MODE
+        //=====================================================
+
+        rb.isKinematic =
+            false;
+
+        rb.useGravity =
+            true;
+
+        rb.constraints =
+            RigidbodyConstraints.None;
+
+        rb.interpolation =
+            RigidbodyInterpolation.Interpolate;
+
+        rb.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousDynamic;
+
+
+        //=====================================================
+        // DAMPING
+        //=====================================================
+
+        rb.linearDamping =
+            0.35f;
+
+        rb.angularDamping =
+            0.45f;
+
+
+        //=====================================================
+        // RESET VELOCITY
+        //=====================================================
+
+        rb.linearVelocity =
+            Vector3.zero;
+
+        rb.angularVelocity =
+            Vector3.zero;
+
+
+        //=====================================================
+        // READ PHOTON FORCE
+        //=====================================================
+
+        float sideVelocity =
+            force.x;
+
+
+        float forwardVelocity =
+            Mathf.Abs(
+                force.z
+            );
+
+
+        float upwardVelocity =
+            Mathf.Abs(
+                force.y
+            );
+
+
+        //=====================================================
+        // FORCE MINIMUM
+        //
+        // Photon phải:
+        // - bay cao
+        // - bay về trước
+        //
+        // Không để giá trị từ PhotonController
+        // quá nhỏ làm xe chỉ bật nhẹ.
+        //=====================================================
+
+        upwardVelocity =
+            Mathf.Max(
+                upwardVelocity,
+                photonUpwardVelocity
+            );
+
+
+        forwardVelocity =
+            Mathf.Max(
+                forwardVelocity,
+                photonForwardVelocity
+            );
+
+
+        sideVelocity =
+            Mathf.Clamp(
+                sideVelocity,
+                -photonSideVelocity,
+                photonSideVelocity
+            );
+
+
+        //=====================================================
+        // DIRECT VELOCITY
+        //
+        // Đây là thay đổi quan trọng nhất.
+        //
+        // Không dùng AddForce làm lực chính nữa.
+        //
+        // Xe được cấp vận tốc ngay lập tức:
+        //
+        // X = lệch ngang
+        // Y = bay lên
+        // Z = bay phía trước
+        //=====================================================
+
+        rb.linearVelocity =
+            new Vector3(
+                sideVelocity,
+                upwardVelocity,
+                forwardVelocity
+            );
+
+
+        //=====================================================
+        // EXTRA FORWARD IMPULSE
+        //
+        // Tạo cảm giác cú Photon tông mạnh hơn.
+        //=====================================================
+
+        rb.AddForce(
+            Vector3.forward *
+            forwardVelocity *
+            0.25f,
+            ForceMode.Impulse
+        );
+
+
+        //=====================================================
+        // EXTRA UPWARD IMPULSE
+        //
+        // Giúp xe không chỉ trượt ngang
+        // mà thực sự bị hất khỏi mặt đường.
+        //=====================================================
+
+        rb.AddForce(
+            Vector3.up *
+            upwardVelocity *
+            0.15f,
+            ForceMode.Impulse
+        );
+
+
+        //=====================================================
+        // ROTATION
+        //=====================================================
+
+        Vector3 torque =
+            new Vector3(
+                Random.Range(
+                    -spinForce,
+                    spinForce
+                ),
+                Random.Range(
+                    -spinForce,
+                    spinForce
+                ),
+                Random.Range(
+                    -spinForce,
+                    spinForce
+                )
+            );
+
+
+        rb.AddTorque(
+            torque,
+            ForceMode.Impulse
+        );
+
+
+        //=====================================================
+        // ROUTINE
+        //=====================================================
+
+        if (knockbackRoutine != null)
+        {
+            StopCoroutine(
+                knockbackRoutine
+            );
+        }
+
+
+        knockbackRoutine =
+            StartCoroutine(
+                KnockbackRoutine()
+            );
+    }
+
+
+    //=========================================================
+    // AMBULANCE KNOCKBACK
     //=========================================================
 
     public void ApplyAmbulanceKnockback(
@@ -741,14 +931,6 @@
 
         //=====================================================
         // MINIMUM AIRBORNE FORCE
-        //
-        // Đây là phần quan trọng.
-        //
-        // Nếu Inspector để trafficUpForce quá thấp,
-        // Traffic vẫn sẽ không bay cao.
-        //
-        // Minimum 32.
-        // Giá trị Inspector của bạn 38 vẫn được giữ.
         //=====================================================
 
         upwardY =
@@ -760,12 +942,6 @@
 
         //=====================================================
         // DIRECT VELOCITY
-        //
-        // Không phụ thuộc mass.
-        //
-        // Y = bay thẳng lên.
-        // X = lệch trái/phải.
-        // Z = bay về trước.
         //=====================================================
 
         rb.linearVelocity =
@@ -778,8 +954,6 @@
 
         //=====================================================
         // ADD EXTRA UPWARD IMPULSE
-        //
-        // Tạo cảm giác cú tông mạnh.
         //=====================================================
 
         rb.AddForce(
@@ -844,81 +1018,83 @@
             physicsLifetime
         );
     }
-        //=========================================================
-        // DISABLE COLLIDERS
-        //=========================================================
 
-        private void DisableVehicleColliders()
+
+    //=========================================================
+    // DISABLE COLLIDERS
+    //=========================================================
+
+    private void DisableVehicleColliders()
+    {
+        if (!disableCollidersWhenKnocked)
+            return;
+
+
+        if (vehicleColliders == null)
+            return;
+
+
+        for (
+            int i = 0;
+            i < vehicleColliders.Length;
+            i++
+        )
         {
-            if (!disableCollidersWhenKnocked)
-                return;
-
-
-            if (vehicleColliders == null)
-                return;
-
-
-            for (
-                int i = 0;
-                i < vehicleColliders.Length;
-                i++
+            if (
+                vehicleColliders[i] != null
             )
             {
-                if (
-                    vehicleColliders[i] != null
-                )
-                {
-                    vehicleColliders[i].enabled =
-                        false;
-                }
-            }
-        }
-
-
-        //=========================================================
-        // KNOCKBACK ROUTINE
-        //=========================================================
-
-        private IEnumerator KnockbackRoutine()
-        {
-            yield return new WaitForSeconds(
-                knockbackDuration
-            );
-
-
-            if (destroyDelay > 0f)
-            {
-                yield return new WaitForSeconds(
-                    destroyDelay
-                );
-            }
-
-
-            Destroy(
-                gameObject
-            );
-        }
-
-
-        //=========================================================
-        // DISABLE
-        //=========================================================
-
-        private void OnDisable()
-        {
-            isKnocked =
-                false;
-
-
-            if (knockbackRoutine != null)
-            {
-                StopCoroutine(
-                    knockbackRoutine
-                );
-
-
-                knockbackRoutine =
-                    null;
+                vehicleColliders[i].enabled =
+                    false;
             }
         }
     }
+
+
+    //=========================================================
+    // KNOCKBACK ROUTINE
+    //=========================================================
+
+    private IEnumerator KnockbackRoutine()
+    {
+        yield return new WaitForSeconds(
+            knockbackDuration
+        );
+
+
+        if (destroyDelay > 0f)
+        {
+            yield return new WaitForSeconds(
+                destroyDelay
+            );
+        }
+
+
+        Destroy(
+            gameObject
+        );
+    }
+
+
+    //=========================================================
+    // DISABLE
+    //=========================================================
+
+    private void OnDisable()
+    {
+        isKnocked =
+            false;
+
+
+        if (knockbackRoutine != null)
+        {
+            StopCoroutine(
+                knockbackRoutine
+            );
+
+
+            knockbackRoutine =
+                null;
+        }
+    }
+}

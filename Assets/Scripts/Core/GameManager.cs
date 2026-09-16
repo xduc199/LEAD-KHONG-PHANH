@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -37,6 +39,10 @@ public class GameManager : MonoBehaviour
     public int ScoreInt =>
         Mathf.FloorToInt(score);
 
+    /// <summary>
+    /// Coin nhặt được trong RUN hiện tại.
+    /// Không phải Gold tài khoản.
+    /// </summary>
     public int CoinCount => coinCount;
 
     public bool IsGameOver => isGameOver;
@@ -46,39 +52,21 @@ public class GameManager : MonoBehaviour
     // EVENTS
     //==============================================================
 
-    /// <summary>
-    /// Gọi khi Score thay đổi sang số nguyên mới.
-    /// </summary>
-    public System.Action<int> OnScoreChanged;
+    public Action<int> OnScoreChanged;
 
+    public Action<int> OnCoinChanged;
 
     /// <summary>
-    /// Gọi khi Coin thay đổi.
+    /// Gold tài khoản hiện tại.
     /// </summary>
-    public System.Action<int> OnCoinChanged;
+    public Action<int> OnGoldChanged;
 
-
-    /// <summary>
-    /// Gọi một lần khi Game Over.
-    /// </summary>
-    public System.Action OnGameOver;
+    public Action OnGameOver;
 
 
     //==============================================================
     // PHOTON COMPATIBILITY
     //==============================================================
-
-    /*
-     * PhotonController cũ vẫn gọi:
-     *
-     * GameManager.Instance.UpdatePhotonTimerUI(...)
-     * GameManager.Instance.HidePhotonStatusUI()
-     *
-     * Không xóa 2 API này vì sẽ làm PhotonController lỗi compile.
-     *
-     * UI Photon mới sẽ được điều khiển bởi hệ thống HUD riêng.
-     * Vì vậy 2 hàm này hiện không còn điều khiển UI cũ.
-     */
 
     private float photonTimeRemaining;
     private bool photonUIActive;
@@ -93,6 +81,8 @@ public class GameManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
+
+            DontDestroyOnLoad(gameObject);
         }
         else
         {
@@ -124,6 +114,7 @@ public class GameManager : MonoBehaviour
 
         OnScoreChanged?.Invoke(ScoreInt);
         OnCoinChanged?.Invoke(coinCount);
+        OnGoldChanged?.Invoke(GetGold());
     }
 
 
@@ -158,11 +149,6 @@ public class GameManager : MonoBehaviour
         int currentScore =
             Mathf.FloorToInt(score);
 
-        /*
-         * Chỉ gửi event khi Score thực sự
-         * chuyển sang một số nguyên mới.
-         */
-
         if (currentScore != previousScore)
         {
             OnScoreChanged?.Invoke(currentScore);
@@ -171,7 +157,7 @@ public class GameManager : MonoBehaviour
 
 
     //==============================================================
-    // ADD COIN
+    // ADD COIN IN RUN
     //==============================================================
 
     public void AddCoin(int amount)
@@ -190,20 +176,10 @@ public class GameManager : MonoBehaviour
 
     //==============================================================
     // PHOTON TIMER UI
-    // COMPATIBILITY API
     //==============================================================
 
     public void UpdatePhotonTimerUI(float timeLeft)
     {
-        /*
-         * Giữ API để PhotonController cũ không lỗi.
-         *
-         * Không còn cập nhật Text UI cũ.
-         *
-         * HUD Photon mới sẽ được nối riêng với
-         * PhotonController ở bước tiếp theo.
-         */
-
         photonTimeRemaining =
             Mathf.Max(0f, timeLeft);
 
@@ -214,17 +190,10 @@ public class GameManager : MonoBehaviour
 
     //==============================================================
     // HIDE PHOTON STATUS UI
-    // COMPATIBILITY API
     //==============================================================
 
     public void HidePhotonStatusUI()
     {
-        /*
-         * Giữ API tương thích với PhotonController.
-         *
-         * Không thao tác UI cũ.
-         */
-
         photonTimeRemaining = 0f;
         photonUIActive = false;
     }
@@ -254,49 +223,62 @@ public class GameManager : MonoBehaviour
 
 
         //==========================================================
-        // HIGH SCORE
+        // CURRENT ACCOUNT DATA
         //==========================================================
 
-        float highScore =
-            PlayerPrefs.GetFloat(
-                "HighScore",
-                0f
+        FirestorePlayerDataManager firestore =
+            FirestorePlayerDataManager.Instance;
+
+
+        if (firestore != null &&
+            firestore.HasPlayerData &&
+            firestore.CurrentPlayerData != null)
+        {
+            int runScore =
+                Mathf.Max(
+                    0,
+                    ScoreInt
+                );
+
+
+            //======================================================
+            // HIGH SCORE → FIRESTORE
+            //======================================================
+
+            _ = SaveBestScoreAsync(
+                firestore,
+                runScore
             );
 
-        if (score > highScore)
-        {
-            highScore = score;
 
-            PlayerPrefs.SetFloat(
-                "HighScore",
-                highScore
+            //======================================================
+            // RUN COIN → ACCOUNT GOLD
+            //======================================================
+
+            if (coinCount > 0)
+            {
+                _ = SaveRunCoinsAsync(
+                    firestore,
+                    coinCount
+                );
+            }
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[GameManager] Không có PlayerData Firestore " +
+                "khi Game Over. Không thể lưu High Score/Coin."
             );
         }
 
 
         //==========================================================
-        // TOTAL COINS
+        // GOLD EVENT
         //==========================================================
 
-        int totalCoins =
-            PlayerPrefs.GetInt(
-                "TotalCoins",
-                0
-            );
-
-        totalCoins += coinCount;
-
-        PlayerPrefs.SetInt(
-            "TotalCoins",
-            totalCoins
+        OnGoldChanged?.Invoke(
+            GetGold()
         );
-
-
-        //==========================================================
-        // SAVE
-        //==========================================================
-
-        PlayerPrefs.Save();
 
 
         //==========================================================
@@ -304,6 +286,146 @@ public class GameManager : MonoBehaviour
         //==========================================================
 
         OnGameOver?.Invoke();
+    }
+
+
+    //==============================================================
+    // SAVE BEST SCORE + LEADERBOARD
+    //==============================================================
+
+    private async Task SaveBestScoreAsync(
+        FirestorePlayerDataManager firestore,
+        int runScore)
+    {
+        if (firestore == null)
+            return;
+
+        if (!firestore.HasPlayerData ||
+            firestore.CurrentPlayerData == null)
+        {
+            return;
+        }
+
+
+        //==========================================================
+        // CAPTURE BEST SCORE BEFORE MODIFYING PLAYER DATA
+        //==========================================================
+
+        int previousBestScore =
+            Mathf.Max(
+                0,
+                firestore.CurrentPlayerData.bestScore
+            );
+
+
+        //==========================================================
+        // CHECK NEW RECORD
+        //==========================================================
+
+        bool isNewRecord =
+            runScore > previousBestScore;
+
+
+        //==========================================================
+        // SAVE PLAYER BEST SCORE
+        //==========================================================
+
+        bool success =
+            await firestore.TrySetBestScoreAsync(
+                runScore
+            );
+
+
+        if (!success)
+        {
+            Debug.LogError(
+                "[GameManager] Không thể lưu Best Score."
+            );
+
+            return;
+        }
+
+
+        //==========================================================
+        // LOG CURRENT BEST
+        //==========================================================
+
+        int currentBestScore =
+            firestore.CurrentPlayerData != null
+                ? firestore.CurrentPlayerData.bestScore
+                : 0;
+
+
+        Debug.Log(
+            "[GameManager] " +
+            $"Best Score Firestore = {currentBestScore}"
+        );
+
+
+        //==========================================================
+        // LEADERBOARD
+        //==========================================================
+
+        if (!isNewRecord)
+        {
+            return;
+        }
+
+
+        bool leaderboardSuccess =
+            await firestore.SaveLeaderboardBestScoreAsync(
+                currentBestScore
+            );
+
+
+        if (leaderboardSuccess)
+        {
+            Debug.Log(
+                "[GameManager] NEW RECORD → " +
+                $"Leaderboard updated: {currentBestScore}"
+            );
+        }
+        else
+        {
+            Debug.LogError(
+                "[GameManager] Best Score đã lưu nhưng " +
+                "không thể cập nhật Leaderboard."
+            );
+        }
+    }
+
+
+    //==============================================================
+    // SAVE RUN COINS
+    //==============================================================
+
+    private async Task SaveRunCoinsAsync(
+        FirestorePlayerDataManager firestore,
+        int runCoins)
+    {
+        if (firestore == null)
+            return;
+
+        bool success =
+            await firestore.AddCoinsAsync(
+                runCoins
+            );
+
+        if (success)
+        {
+            int gold =
+                firestore.CurrentPlayerData != null
+                    ? firestore.CurrentPlayerData.coins
+                    : 0;
+
+            OnGoldChanged?.Invoke(gold);
+
+            Debug.Log(
+                "[GameManager] " +
+                $"Run Coins +{runCoins} → " +
+                $"Firestore Gold = {gold}"
+            );
+        }
     }
 
 
@@ -327,10 +449,20 @@ public class GameManager : MonoBehaviour
 
     public float GetHighScore()
     {
-        return PlayerPrefs.GetFloat(
-            "HighScore",
-            0f
-        );
+        FirestorePlayerDataManager firestore =
+            FirestorePlayerDataManager.Instance;
+
+        if (firestore != null &&
+            firestore.HasPlayerData &&
+            firestore.CurrentPlayerData != null)
+        {
+            return Mathf.Max(
+                0,
+                firestore.CurrentPlayerData.bestScore
+            );
+        }
+
+        return 0f;
     }
 
 
@@ -343,15 +475,167 @@ public class GameManager : MonoBehaviour
 
 
     //==============================================================
-    // TOTAL COINS
+    // GOLD
+    //==============================================================
+
+    /// <summary>
+    /// Lấy Gold của tài khoản Firebase hiện tại.
+    /// </summary>
+    public int GetGold()
+    {
+        FirestorePlayerDataManager firestore =
+            FirestorePlayerDataManager.Instance;
+
+        if (firestore != null &&
+            firestore.HasPlayerData &&
+            firestore.CurrentPlayerData != null)
+        {
+            return Mathf.Max(
+                0,
+                firestore.CurrentPlayerData.coins
+            );
+        }
+
+        return 0;
+    }
+
+
+    //==============================================================
+    // ADD GOLD
+    //==============================================================
+
+    public void AddGold(int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        FirestorePlayerDataManager firestore =
+            FirestorePlayerDataManager.Instance;
+
+        if (firestore == null ||
+            !firestore.HasPlayerData)
+        {
+            Debug.LogWarning(
+                "[GameManager] Không có PlayerData. " +
+                "Không thể AddGold."
+            );
+
+            return;
+        }
+
+        _ = AddGoldAsync(
+            firestore,
+            amount
+        );
+    }
+
+
+    private async Task AddGoldAsync(
+        FirestorePlayerDataManager firestore,
+        int amount)
+    {
+        bool success =
+            await firestore.AddCoinsAsync(
+                amount
+            );
+
+        if (!success)
+            return;
+
+        int gold =
+            firestore.CurrentPlayerData != null
+                ? firestore.CurrentPlayerData.coins
+                : 0;
+
+        OnGoldChanged?.Invoke(gold);
+    }
+
+
+    //==============================================================
+    // CAN AFFORD GOLD
+    //==============================================================
+
+    public bool CanAffordGold(int amount)
+    {
+        if (amount < 0)
+            return false;
+
+        return GetGold() >= amount;
+    }
+
+
+    //==============================================================
+    // SPEND GOLD
+    //==============================================================
+
+    public bool SpendGold(int amount)
+    {
+        if (amount <= 0)
+            return false;
+
+        FirestorePlayerDataManager firestore =
+            FirestorePlayerDataManager.Instance;
+
+        if (firestore == null ||
+            !firestore.HasPlayerData ||
+            firestore.CurrentPlayerData == null)
+        {
+            Debug.LogWarning(
+                "[GameManager] Không có PlayerData. " +
+                "Không thể SpendGold."
+            );
+
+            return false;
+        }
+
+        int currentGold =
+            firestore.CurrentPlayerData.coins;
+
+        if (currentGold < amount)
+            return false;
+
+        int newGold =
+            currentGold - amount;
+
+        firestore.CurrentPlayerData.coins =
+            newGold;
+
+        _ = SaveSpentGoldAsync(
+            firestore
+        );
+
+        OnGoldChanged?.Invoke(
+            newGold
+        );
+
+        return true;
+    }
+
+
+    private async Task SaveSpentGoldAsync(
+        FirestorePlayerDataManager firestore)
+    {
+        bool success =
+            await firestore.SetCoinsAsync(
+                firestore.CurrentPlayerData.coins
+            );
+
+        if (!success)
+        {
+            Debug.LogError(
+                "[GameManager] Không thể lưu Gold sau khi SpendGold."
+            );
+        }
+    }
+
+
+    //==============================================================
+    // API TƯƠNG THÍCH
     //==============================================================
 
     public int GetTotalCoins()
     {
-        return PlayerPrefs.GetInt(
-            "TotalCoins",
-            0
-        );
+        return GetGold();
     }
 
 
@@ -368,7 +652,19 @@ public class GameManager : MonoBehaviour
 
 
     //==============================================================
-    // OPTIONAL RESET
+    // BEGIN NEW RUN
+    //==============================================================
+
+    public void BeginNewRun()
+    {
+        Time.timeScale = 1f;
+
+        ResetRunData();
+    }
+
+
+    //==============================================================
+    // RESET RUN
     //==============================================================
 
     public void ResetRunData()
@@ -382,5 +678,6 @@ public class GameManager : MonoBehaviour
 
         OnScoreChanged?.Invoke(0);
         OnCoinChanged?.Invoke(0);
+        OnGoldChanged?.Invoke(GetGold());
     }
 }

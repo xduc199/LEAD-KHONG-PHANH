@@ -171,9 +171,14 @@ MonoBehaviour:
   minimumSpeed: 5
   playerSpeedMargin: 1
   moveForward: 1
-  photonKnockbackDuration: 2.5
-  photonDestroyDelay: 0.25
-  photonSpinForce: 18
+  vehicleHeightY: 1
+  knockbackDuration: 2.5
+  destroyDelay: 0.25
+  spinForce: 18
+  disableCollidersWhenKnocked: 1
+  photonUpwardVelocity: 25
+  photonForwardVelocity: 25
+  photonSideVelocity: 4
 --- !u!114 &3354494235644017344
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -198,6 +203,11 @@ MonoBehaviour:
   lateralSafety: 2.5
   laneChangeBlockingDistance: 9
   laneChangeCooldown: 1.2
+  maxTurnAngle: 10
+  maxLeanAngle: 7
+  rotationSpeed: 10
+  rotationResetSpeed: 8
+  useVehicleTypeSteering: 1
   softBrakeDistance: 14
   strongBrakeDistance: 8
   hardSafetyDistance: 4.5

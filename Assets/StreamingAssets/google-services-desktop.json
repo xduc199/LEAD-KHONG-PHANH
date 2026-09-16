@@ -1,0 +1,31 @@
+{
+  "project_info": {
+    "project_number": "915020306731",
+    "project_id": "lead-khong-phanh",
+    "storage_bucket": "lead-khong-phanh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:915020306731:ios:8fd6aa388718547a304d6e",
+        "android_client_info": {
+          "package_name": "com.UnityTechnologies.com.unity.template.urpblank"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyAB7j_s-ggp2s9tYjdTKS5-veiDCMitfag"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 0
+        },
+        "appinvite_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -43,10 +43,18 @@ public class PhotonSpawner : MonoBehaviour
     [Header("Photon Height")]
 
     [Tooltip(
-        "Độ cao của Photon so với mặt đường / vị trí Y của Player.\n" +
-        "0 = ngang vị trí Y của Player.\n" +
-        "0.5 = cao hơn 0.5.\n" +
-        "1 = cao hơn 1."
+        "Y cố định của mặt đường dùng để spawn Photon.\n" +
+        "Không lấy Y của Player.\n" +
+        "Ví dụ mặt đường ở Y = 0 thì để 0."
+    )]
+    [SerializeField]
+    private float roadSpawnY = 0f;
+
+    [Tooltip(
+        "Độ cao của Photon so với mặt đường.\n" +
+        "0 = nằm tại roadSpawnY.\n" +
+        "0.5 = cao hơn mặt đường 0.5.\n" +
+        "1 = cao hơn mặt đường 1."
     )]
     [SerializeField]
     private float itemHeight = 0.5f;
@@ -217,8 +225,22 @@ public class PhotonSpawner : MonoBehaviour
         // SPAWN Y
         //=========================================================
 
+        /*
+         * QUAN TRỌNG:
+         *
+         * Không lấy Y từ Player nữa.
+         *
+         * Player có thể:
+         * - chạy trên đường
+         * - leo Ramp
+         * - bay trên không
+         * - bị Ba Gác hất lên
+         *
+         * Photon vẫn phải spawn theo mặt đường.
+         */
+
         float spawnY =
-            playerTransform.position.y +
+            roadSpawnY +
             itemHeight;
 
 
@@ -281,8 +303,13 @@ public class PhotonSpawner : MonoBehaviour
             spawnDistanceAhead;
 
 
+        /*
+         * Gizmo phải dùng đúng Y thực tế
+         * của Photon để nhìn trong Scene.
+         */
+
         float spawnY =
-            playerTransform.position.y +
+            roadSpawnY +
             itemHeight;
 
 

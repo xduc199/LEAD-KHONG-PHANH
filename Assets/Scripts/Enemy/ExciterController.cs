@@ -190,6 +190,49 @@ public class ExciterController : MonoBehaviour
 
 
     //=============================================================
+    // EXCITER -> PLAYER KNOCKBACK
+    //=============================================================
+
+    [Header("Exciter → Player Knockback")]
+
+    [Tooltip(
+        "Tốc độ Player bay về phía trước khi bị Exciter húc."
+    )]
+    [SerializeField]
+    private float playerForwardKnockbackVelocity = 28f;
+
+    [Tooltip(
+        "Tốc độ Player bay lên khi bị Exciter húc."
+    )]
+    [SerializeField]
+    private float playerUpwardKnockbackVelocity = 18f;
+
+    [Tooltip(
+        "Tốc độ bốc đầu/lộn của Player quanh trục RIGHT."
+    )]
+    [SerializeField]
+    private float playerWheelieAngularVelocity = 18f;
+
+    [Tooltip(
+        "Tốc độ xoay/lộn thêm quanh trục FORWARD."
+    )]
+    [SerializeField]
+    private float playerSpinAngularVelocity = 22f;
+
+    [Tooltip(
+        "Tốc độ xoay Y nhẹ để cú bay tự nhiên hơn."
+    )]
+    [SerializeField]
+    private float playerYawAngularVelocity = 4f;
+
+    [Tooltip(
+        "Thời gian cho Player bay trước khi Game Over."
+    )]
+    [SerializeField]
+    private float playerKnockbackGameOverDelay = 1.25f;
+
+
+    //=============================================================
     // PATH
     //=============================================================
 
@@ -1893,7 +1936,7 @@ public class ExciterController : MonoBehaviour
         ApplyKnockback(
             new Vector3(
                 0f,
-                22f,
+                               22f,
                 -18f
             )
         );
@@ -1948,14 +1991,8 @@ public class ExciterController : MonoBehaviour
         //=========================================================
         // SHIELD ACTIVE
         //
-        // QUAN TRỌNG:
-        // KHÔNG gọi shield.ConsumeShield() ở đây.
-        //
-        // PlayerController.ApplyKnockback() đã có hệ thống Shield
-        // riêng và sẽ tự ConsumeShield().
-        //
-        // Nếu Exciter Consume trước -> PlayerController kiểm tra
-        // lần 2 -> Shield đã hết -> Player có thể bị chết.
+        // KHÔNG consume shield ở đây.
+        // PlayerController tự xử lý Shield.
         //=========================================================
 
         if (
@@ -1979,9 +2016,6 @@ public class ExciterController : MonoBehaviour
 
             //=====================================================
             // EXCITER BAY LÊN + BAY NGƯỢC
-            //
-            // Exciter vẫn chết / bị hất như yêu cầu.
-            // Audio cũng sẽ được Stop() trong ApplyKnockback().
             //=====================================================
 
             ApplyKnockback(
@@ -1995,24 +2029,14 @@ public class ExciterController : MonoBehaviour
             //=====================================================
             // PLAYER
             //
-            // KHÔNG tự xử lý Shield ở Exciter.
+            // QUAN TRỌNG:
+            // Dùng hệ riêng cho Exciter.
             //
-            // PlayerController sẽ:
-            //
-            // Shield còn:
-            //     ConsumeShield()
-            //     return
-            //
-            // Shield hết:
-            //     Player mới bị chết.
+            // PlayerController sẽ tự xử lý Shield.
             //=====================================================
 
-            player.ApplyKnockback(
-                new Vector3(
-                    0f,
-                    13f,
-                    -1.5f
-                )
+            player.ApplyExciterKnockback(
+                GetExciterPlayerKnockbackForce()
             );
 
             return;
@@ -2045,16 +2069,57 @@ public class ExciterController : MonoBehaviour
         );
 
         //=========================================================
-        // PLAYER BỊ HẤT / CHẾT
+        // PLAYER
+        //
+        // KHÔNG DÙNG ApplyKnockback() THƯỜNG.
+        //
+        // Dùng hệ Exciter riêng để:
+        // - bay về phía trước
+        // - bốc đầu
+        // - xoay nhiều vòng
         //=========================================================
 
-        player.ApplyKnockback(
-            new Vector3(
-                0f,
-                4f,
-                6f
-            )
+        player.ApplyExciterKnockback(
+            GetExciterPlayerKnockbackForce()
         );
+    }
+
+
+    //=============================================================
+    // GET EXCITER -> PLAYER KNOCKBACK FORCE
+    //=============================================================
+
+    private Vector3 GetExciterPlayerKnockbackForce()
+    {
+        Vector3 forwardDirection =
+            lastMoveDir.sqrMagnitude >
+            0.001f
+                ? lastMoveDir.normalized
+                : transform.forward;
+
+        forwardDirection.y = 0f;
+
+        if (
+            forwardDirection.sqrMagnitude <
+            0.001f
+        )
+        {
+            forwardDirection =
+                Vector3.forward;
+        }
+
+        forwardDirection.Normalize();
+
+        return
+            (
+                forwardDirection *
+                playerForwardKnockbackVelocity
+            )
+            +
+            (
+                Vector3.up *
+                playerUpwardKnockbackVelocity
+            );
     }
 
 

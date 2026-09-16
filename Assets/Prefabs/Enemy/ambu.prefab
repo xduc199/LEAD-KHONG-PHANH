@@ -149,10 +149,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1b868ecbf4cbfd64ea40eac179ef81b0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  trafficTouchTolerance: 0.2
   vehicleHeightOffset: 0.5
   minSpeed: 65
   maxSpeed: 65
-  playerSpeedMultiplier: 1.4
+  playerSpeedMultiplier: 2
   speedBonusOverPlayer: 8
   maxAmbulanceSpeed: 120
   catchUpDistance: 25
@@ -173,10 +174,10 @@ MonoBehaviour:
   playerCollisionForwardDistance: 3.5
   collisionStartDelay: 0.2
   playerHitCooldown: 2
-  playerUpForce: 32
-  playerForwardForce: 1.5
+  playerUpForce: 12
+  playerForwardForce: 35
   forcePositivePlayerZ: 1
-  trafficCollisionRadius: 0
+  trafficCollisionRadius: 1
   trafficCollisionForwardDistance: 22
   trafficForwardForce: 38
   trafficUpForce: 5

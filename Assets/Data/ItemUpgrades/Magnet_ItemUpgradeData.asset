@@ -1,0 +1,197 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e55a5d479da307439749aefd5e1a484, type: 3}
+  m_Name: Magnet_ItemUpgradeData
+  m_EditorClassIdentifier: 
+  itemType: 3
+  maxLevel: 20
+  levels:
+  - level: 1
+    duration: 8
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 8
+    pullSpeed: 30
+    collectDistance: 1
+    upgradeCost: 0
+  - level: 2
+    duration: 8.2
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 8.25
+    pullSpeed: 30.5
+    collectDistance: 1.05
+    upgradeCost: 1200
+  - level: 3
+    duration: 8.4
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 8.5
+    pullSpeed: 31
+    collectDistance: 1.1
+    upgradeCost: 1500
+  - level: 4
+    duration: 8.6
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 8.75
+    pullSpeed: 31.5
+    collectDistance: 1.15
+    upgradeCost: 1800
+  - level: 5
+    duration: 8.8
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 9
+    pullSpeed: 32
+    collectDistance: 1.2
+    upgradeCost: 2000
+  - level: 6
+    duration: 9
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 9.25
+    pullSpeed: 32.5
+    collectDistance: 1.25
+    upgradeCost: 2300
+  - level: 7
+    duration: 9.2
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 9.5
+    pullSpeed: 33
+    collectDistance: 1.3
+    upgradeCost: 2800
+  - level: 8
+    duration: 9.4
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 9.75
+    pullSpeed: 33.5
+    collectDistance: 1.35
+    upgradeCost: 3300
+  - level: 9
+    duration: 9.6
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 10
+    pullSpeed: 34
+    collectDistance: 1.4
+    upgradeCost: 3800
+  - level: 10
+    duration: 9.8
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 10.25
+    pullSpeed: 34.5
+    collectDistance: 1.45
+    upgradeCost: 4300
+  - level: 11
+    duration: 10
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 10.5
+    pullSpeed: 35
+    collectDistance: 1.5
+    upgradeCost: 4800
+  - level: 12
+    duration: 10.2
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 10.75
+    pullSpeed: 35.5
+    collectDistance: 1.55
+    upgradeCost: 5400
+  - level: 13
+    duration: 10.4
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 11
+    pullSpeed: 36
+    collectDistance: 1.6
+    upgradeCost: 6100
+  - level: 14
+    duration: 10.6
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 11.25
+    pullSpeed: 36.5
+    collectDistance: 1.65
+    upgradeCost: 6700
+  - level: 15
+    duration: 10.8
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 11.5
+    pullSpeed: 37
+    collectDistance: 1.7
+    upgradeCost: 7300
+  - level: 16
+    duration: 11
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 11.75
+    pullSpeed: 37.5
+    collectDistance: 1.75
+    upgradeCost: 8000
+  - level: 17
+    duration: 11.2
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 12
+    pullSpeed: 38
+    collectDistance: 1.8
+    upgradeCost: 8600
+  - level: 18
+    duration: 11.4
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 12.25
+    pullSpeed: 38.5
+    collectDistance: 1.85
+    upgradeCost: 9300
+  - level: 19
+    duration: 11.6
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 12.5
+    pullSpeed: 39
+    collectDistance: 1.9
+    upgradeCost: 9900
+  - level: 20
+    duration: 11.8
+    horizontalSpeed: 0
+    speedMultiplier: 0
+    maxHits: 1
+    magnetRadius: 12.75
+    pullSpeed: 39.5
+    collectDistance: 1.95
+    upgradeCost: 10900

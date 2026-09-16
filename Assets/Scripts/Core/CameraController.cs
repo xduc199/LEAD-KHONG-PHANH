@@ -13,6 +13,7 @@ public class CameraController : MonoBehaviour
     // =========================================================
 
     [Header("CAMERA VIEW")]
+
     [SerializeField]
     private CameraViewMode currentViewMode =
         CameraViewMode.ThirdPerson;
@@ -110,6 +111,37 @@ public class CameraController : MonoBehaviour
 
 
     // =========================================================
+    // CAMERA FORWARD LOCK
+    // =========================================================
+
+    [Header("CAMERA FORWARD LOCK")]
+
+    [Tooltip(
+        "Camera không được phép nhìn quá lệch khỏi hướng chạy phía trước."
+    )]
+    [SerializeField]
+    private float maxCameraYawFromForward = 85f;
+
+    [Tooltip(
+        "Camera sử dụng hướng chạy ổn định thay vì rotation vật lý của Player."
+    )]
+    [SerializeField]
+    private bool lockCameraToGameplayForward = true;
+
+    [Tooltip(
+        "Nếu Player xoay vật lý quá mạnh, camera vẫn giữ hướng gameplay."
+    )]
+    [SerializeField]
+    private bool preventBackwardView = true;
+
+    [Tooltip(
+        "Tốc độ camera chuyển sang hướng mới. Cao hơn = phản ứng nhanh hơn."
+    )]
+    [SerializeField]
+    private float cameraForwardSmooth = 12f;
+
+
+    // =========================================================
     // ROTATION
     // =========================================================
 
@@ -202,6 +234,11 @@ public class CameraController : MonoBehaviour
 
     private Quaternion finalCameraRotation;
 
+    // Hướng camera ổn định.
+    private Vector3 stableForward;
+
+    private bool stableForwardInitialized;
+
 
     // =========================================================
     // UNITY
@@ -235,6 +272,8 @@ public class CameraController : MonoBehaviour
                 normalFOV;
         }
 
+        InitializeStableForward();
+
         if (target != null)
         {
             CalculateBaseCameraPosition();
@@ -261,6 +300,13 @@ public class CameraController : MonoBehaviour
         }
 
         FindPhotonController();
+
+
+        // =====================================================
+        // 0. UPDATE STABLE FORWARD
+        // =====================================================
+
+        UpdateStableForward();
 
 
         // =====================================================
@@ -340,6 +386,228 @@ public class CameraController : MonoBehaviour
 
 
     // =========================================================
+    // STABLE FORWARD
+    // =========================================================
+
+    private void InitializeStableForward()
+    {
+        if (target == null)
+            return;
+
+
+        Vector3 forward =
+            target.forward;
+
+        forward.y = 0f;
+
+
+        if (forward.sqrMagnitude <
+            0.0001f)
+        {
+            forward =
+                Vector3.forward;
+        }
+
+
+        stableForward =
+            forward.normalized;
+
+        stableForwardInitialized =
+            true;
+    }
+
+
+    private void UpdateStableForward()
+    {
+        if (target == null)
+            return;
+
+
+        if (!stableForwardInitialized)
+        {
+            InitializeStableForward();
+            return;
+        }
+
+
+        Vector3 desiredForward;
+
+
+        // =====================================================
+        // GAMEPLAY FORWARD
+        // =====================================================
+
+        if (lockCameraToGameplayForward)
+        {
+            /*
+             * Game endless runner chạy theo +Z.
+             *
+             * Vì vậy camera không cần tin rotation vật lý
+             * của Player khi Player đang bị hất / xoay.
+             */
+            desiredForward =
+                Vector3.forward;
+        }
+        else
+        {
+            desiredForward =
+                target.forward;
+
+            desiredForward.y = 0f;
+
+
+            if (desiredForward.sqrMagnitude <
+                0.0001f)
+            {
+                desiredForward =
+                    stableForward;
+            }
+
+            desiredForward.Normalize();
+        }
+
+
+        // =====================================================
+        // PREVENT BACKWARD ROTATION
+        // =====================================================
+
+        if (preventBackwardView)
+        {
+            float angle =
+                Vector3.SignedAngle(
+                    stableForward,
+                    desiredForward,
+                    Vector3.up
+                );
+
+
+            angle =
+                Mathf.Clamp(
+                    angle,
+                    -maxCameraYawFromForward,
+                    maxCameraYawFromForward
+                );
+
+
+            desiredForward =
+                Quaternion.AngleAxis(
+                    angle,
+                    Vector3.up
+                )
+                *
+                stableForward;
+
+
+            desiredForward.y = 0f;
+
+            desiredForward.Normalize();
+        }
+
+
+        // =====================================================
+        // SMOOTH
+        // =====================================================
+
+        float t =
+            1f -
+            Mathf.Exp(
+                -cameraForwardSmooth *
+                Time.deltaTime
+            );
+
+
+        stableForward =
+            Vector3.Slerp(
+                stableForward,
+                desiredForward,
+                t
+            );
+
+
+        stableForward.y = 0f;
+
+
+        if (stableForward.sqrMagnitude <
+            0.0001f)
+        {
+            stableForward =
+                Vector3.forward;
+        }
+
+
+        stableForward.Normalize();
+    }
+
+
+    // =========================================================
+    // GET CAMERA FORWARD
+    // =========================================================
+
+    private Vector3 GetCameraForward()
+    {
+        Vector3 forward =
+            stableForward;
+
+        forward.y = 0f;
+
+
+        if (forward.sqrMagnitude <
+            0.0001f)
+        {
+            forward =
+                Vector3.forward;
+        }
+
+
+        return forward.normalized;
+    }
+
+
+    // =========================================================
+    // APPLY YAW
+    // =========================================================
+
+    private Vector3 ApplyYaw(
+        Vector3 forward,
+        float yaw
+    )
+    {
+        yaw =
+            Mathf.Clamp(
+                yaw,
+                -maxCameraYawFromForward,
+                maxCameraYawFromForward
+            );
+
+
+        Quaternion yawRotation =
+            Quaternion.AngleAxis(
+                yaw,
+                Vector3.up
+            );
+
+
+        Vector3 result =
+            yawRotation *
+            forward;
+
+
+        result.y = 0f;
+
+
+        if (result.sqrMagnitude <
+            0.0001f)
+        {
+            result =
+                Vector3.forward;
+        }
+
+
+        return result.normalized;
+    }
+
+
+    // =========================================================
     // BASE POSITION
     // =========================================================
 
@@ -349,16 +617,27 @@ public class CameraController : MonoBehaviour
             return;
 
 
+        Vector3 cameraForward =
+            GetCameraForward();
+
+
+        Vector3 cameraRight =
+            Vector3.Cross(
+                Vector3.up,
+                cameraForward
+            ).normalized;
+
+
         if (currentViewMode ==
             CameraViewMode.ThirdPerson)
         {
             baseCameraPosition =
                 target.position
-                + target.right *
+                + cameraRight *
                 thirdPersonX
                 + Vector3.up *
                 thirdPersonY
-                + target.forward *
+                + cameraForward *
                 thirdPersonZ;
 
             return;
@@ -371,11 +650,11 @@ public class CameraController : MonoBehaviour
 
         baseCameraPosition =
             target.position
-            + target.right *
+            + cameraRight *
             firstPersonX
             + Vector3.up *
             firstPersonY
-            + target.forward *
+            + cameraForward *
             firstPersonZ;
     }
 
@@ -398,35 +677,18 @@ public class CameraController : MonoBehaviour
             CameraViewMode.ThirdPerson)
         {
             Vector3 forward =
-                target.forward;
-
-            // Không lấy pitch/roll của xe.
-            forward.y = 0f;
-
-            if (forward.sqrMagnitude <
-                0.0001f)
-            {
-                forward =
-                    Vector3.forward;
-            }
-
-            forward.Normalize();
+                GetCameraForward();
 
 
             // =================================================
             // USER YAW
             // =================================================
 
-            Quaternion yawRotation =
-                Quaternion.AngleAxis(
-                    thirdPersonYaw,
-                    Vector3.up
-                );
-
-
             forward =
-                yawRotation *
-                forward;
+                ApplyYaw(
+                    forward,
+                    thirdPersonYaw
+                );
 
 
             // =================================================
@@ -486,34 +748,18 @@ public class CameraController : MonoBehaviour
         // =====================================================
 
         Vector3 firstForward =
-            target.forward;
-
-        firstForward.y = 0f;
-
-        if (firstForward.sqrMagnitude <
-            0.0001f)
-        {
-            firstForward =
-                Vector3.forward;
-        }
-
-        firstForward.Normalize();
+            GetCameraForward();
 
 
         // =====================================================
         // YAW
         // =====================================================
 
-        Quaternion firstYawRotation =
-            Quaternion.AngleAxis(
-                firstPersonYaw,
-                Vector3.up
-            );
-
-
         firstForward =
-            firstYawRotation *
-            firstForward;
+            ApplyYaw(
+                firstForward,
+                firstPersonYaw
+            );
 
 
         // =====================================================
@@ -932,6 +1178,42 @@ public class CameraController : MonoBehaviour
             return;
 
 
+        Vector3 forward;
+
+
+        if (Application.isPlaying &&
+            stableForwardInitialized)
+        {
+            forward =
+                GetCameraForward();
+        }
+        else
+        {
+            forward =
+                target.forward;
+
+            forward.y = 0f;
+
+
+            if (forward.sqrMagnitude <
+                0.0001f)
+            {
+                forward =
+                    Vector3.forward;
+            }
+
+
+            forward.Normalize();
+        }
+
+
+        Vector3 right =
+            Vector3.Cross(
+                Vector3.up,
+                forward
+            ).normalized;
+
+
         Vector3 point;
 
 
@@ -940,22 +1222,22 @@ public class CameraController : MonoBehaviour
         {
             point =
                 target.position
-                + target.right *
+                + right *
                 thirdPersonX
                 + Vector3.up *
                 thirdPersonY
-                + target.forward *
+                + forward *
                 thirdPersonZ;
         }
         else
         {
             point =
                 target.position
-                + target.right *
+                + right *
                 firstPersonX
                 + Vector3.up *
                 firstPersonY
-                + target.forward *
+                + forward *
                 firstPersonZ;
         }
 
@@ -1057,6 +1339,23 @@ public class CameraController : MonoBehaviour
                 firstPersonRoll,
                 -45f,
                 45f
+            );
+
+
+        // CAMERA FORWARD
+
+        maxCameraYawFromForward =
+            Mathf.Clamp(
+                maxCameraYawFromForward,
+                45f,
+                89f
+            );
+
+
+        cameraForwardSmooth =
+            Mathf.Max(
+                0f,
+                cameraForwardSmooth
             );
 
 

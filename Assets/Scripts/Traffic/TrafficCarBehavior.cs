@@ -84,6 +84,43 @@ public class TrafficCarBehavior : MonoBehaviour
 
 
     //=========================================================
+    // STUCK RECOVERY
+    //=========================================================
+
+    [Header("Stuck Recovery")]
+
+    [Tooltip(
+        "Tốc độ tối đa được xem là xe đang bị kẹt."
+    )]
+    [SerializeField] private float stuckSpeedThreshold = 2.5f;
+
+    [Tooltip(
+        "Thời gian xe phải bị kẹt liên tục trước khi kích hoạt recovery."
+    )]
+    [SerializeField] private float stuckDuration = 2.5f;
+
+    [Tooltip(
+        "Khoảng an toàn phía trước khi recovery."
+    )]
+    [SerializeField] private float stuckFrontSafety = 13f;
+
+    [Tooltip(
+        "Khoảng an toàn phía sau khi recovery."
+    )]
+    [SerializeField] private float stuckRearSafety = 13f;
+
+    [Tooltip(
+        "Thời gian chờ trước khi thử recovery lại."
+    )]
+    [SerializeField] private float stuckRecoveryCooldown = 2f;
+
+    [Tooltip(
+        "Cho phép hệ thống tự xử lý khi xe bị kẹt."
+    )]
+    [SerializeField] private bool enableStuckRecovery = true;
+
+
+    //=========================================================
     // PLAYER SAFETY
     //=========================================================
 
@@ -137,6 +174,17 @@ public class TrafficCarBehavior : MonoBehaviour
     private float laneChangeCooldownTimer;
 
     private TrafficCarBehavior obstacleAhead;
+
+
+    //=========================================================
+    // STUCK INTERNAL
+    //=========================================================
+
+    private float stuckTimer;
+
+    private float stuckRecoveryCooldownTimer;
+
+    private bool isStuck;
 
 
     //=========================================================
@@ -249,6 +297,12 @@ public class TrafficCarBehavior : MonoBehaviour
                 Time.deltaTime;
         }
 
+        if (stuckRecoveryCooldownTimer > 0f)
+        {
+            stuckRecoveryCooldownTimer -=
+                Time.deltaTime;
+        }
+
         if (isChangingLane)
         {
             UpdateLaneChange();
@@ -280,6 +334,10 @@ public class TrafficCarBehavior : MonoBehaviour
             laneIndex;
 
         isChangingLane = false;
+
+        ResetStuckState();
+
+        stuckRecoveryCooldownTimer = 0f;
 
         SnapToLane();
 
@@ -319,31 +377,50 @@ public class TrafficCarBehavior : MonoBehaviour
         obstacleAhead =
             ahead;
 
+
+        //=====================================================
+        // KHÔNG CÓ XE PHÍA TRƯỚC
+        //=====================================================
+
         if (ahead == null)
         {
+            ResetStuckState();
+
             RestoreSpeed();
+
             return;
         }
+
 
         float distance =
             GetForwardDistance(
                 ahead
             );
 
+
         if (distance <= 0f)
         {
+            ResetStuckState();
+
             RestoreSpeed();
+
             return;
         }
+
 
         TrafficVehicle aheadVehicle =
             ahead.GetComponent<TrafficVehicle>();
 
+
         if (aheadVehicle == null)
         {
+            ResetStuckState();
+
             RestoreSpeed();
+
             return;
         }
+
 
         float mySpeed =
             vehicle.GetMoveSpeed();
@@ -351,8 +428,20 @@ public class TrafficCarBehavior : MonoBehaviour
         float aheadSpeed =
             aheadVehicle.GetMoveSpeed();
 
+
         bool playerBlocking =
             IsPlayerBlockingLaneChangeCorridor();
+
+
+        //=====================================================
+        // CẬP NHẬT STUCK
+        //=====================================================
+
+        UpdateStuckState(
+            mySpeed,
+            aheadSpeed,
+            distance
+        );
 
 
         //=====================================================
@@ -368,6 +457,13 @@ public class TrafficCarBehavior : MonoBehaviour
                 aheadVehicle,
                 distance
             );
+
+            if (
+                TryStuckRecovery()
+            )
+            {
+                return;
+            }
 
             return;
         }
@@ -387,6 +483,13 @@ public class TrafficCarBehavior : MonoBehaviour
                 distance
             );
 
+            if (
+                TryStuckRecovery()
+            )
+            {
+                return;
+            }
+
             return;
         }
 
@@ -405,8 +508,14 @@ public class TrafficCarBehavior : MonoBehaviour
                 distance
             );
 
+
             if (playerBlocking)
+            {
+                TryStuckRecovery();
+
                 return;
+            }
+
 
             if (
                 aheadSpeed <
@@ -414,7 +523,14 @@ public class TrafficCarBehavior : MonoBehaviour
                 0.5f
             )
             {
-                TryChangeLane();
+                if (
+                    TryChangeLane()
+                )
+                {
+                    return;
+                }
+
+                TryStuckRecovery();
             }
 
             return;
@@ -437,8 +553,11 @@ public class TrafficCarBehavior : MonoBehaviour
                     distance
                 );
 
+                TryStuckRecovery();
+
                 return;
             }
+
 
             if (
                 aheadSpeed <
@@ -446,16 +565,24 @@ public class TrafficCarBehavior : MonoBehaviour
                 0.75f
             )
             {
-                if (TryChangeLane())
+                if (
+                    TryChangeLane()
+                )
+                {
                     return;
+                }
+
 
                 FollowVehicle(
                     aheadVehicle,
                     distance
                 );
 
+                TryStuckRecovery();
+
                 return;
             }
+
 
             FollowVehicle(
                 aheadVehicle,
@@ -470,16 +597,122 @@ public class TrafficCarBehavior : MonoBehaviour
         // XA
         //=====================================================
 
+        ResetStuckState();
+
         RestoreSpeed();
     }
 
 
     //=========================================================
-    // TRY CHANGE LANE
+    // STUCK STATE
     //=========================================================
 
-    private bool TryChangeLane()
+    private void UpdateStuckState(
+        float mySpeed,
+        float aheadSpeed,
+        float distance
+    )
     {
+        if (!enableStuckRecovery)
+        {
+            ResetStuckState();
+
+            return;
+        }
+
+
+        bool speedTooLow =
+            mySpeed <=
+            Mathf.Max(
+                0f,
+                stuckSpeedThreshold
+            );
+
+
+        bool vehicleTooClose =
+            distance <=
+            softBrakeDistance;
+
+
+        bool blockedByVehicle =
+            aheadSpeed <=
+            mySpeed +
+            0.5f;
+
+
+        if (
+            speedTooLow &&
+            vehicleTooClose &&
+            blockedByVehicle
+        )
+        {
+            stuckTimer +=
+                Time.deltaTime;
+
+
+            if (
+                stuckTimer >=
+                Mathf.Max(
+                    0.1f,
+                    stuckDuration
+                )
+            )
+            {
+                if (!isStuck)
+                {
+                    isStuck = true;
+
+                    if (debugLogs)
+                    {
+                        Debug.Log(
+                            name +
+                            " | STUCK DETECTED | " +
+                            "Speed=" +
+                            mySpeed.ToString("F2") +
+                            " | Distance=" +
+                            distance.ToString("F2")
+                        );
+                    }
+                }
+            }
+        }
+        else
+        {
+            ResetStuckState();
+        }
+    }
+
+
+    //=========================================================
+    // RESET STUCK
+    //=========================================================
+
+    private void ResetStuckState()
+    {
+        stuckTimer = 0f;
+
+        isStuck = false;
+    }
+
+
+    //=========================================================
+    // STUCK RECOVERY
+    //=========================================================
+
+    private bool TryStuckRecovery()
+    {
+        if (!enableStuckRecovery)
+            return false;
+
+
+        if (!isStuck)
+            return false;
+
+
+        if (isChangingLane)
+            return false;
+
+
         if (
             laneChangeCooldownTimer >
             0f
@@ -488,166 +721,81 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
-        int safeLane =
-            FindBestAlternativeLane();
-
-        if (safeLane < 0)
-            return false;
 
         if (
-            Random.value >
-            laneChangeProbability
+            stuckRecoveryCooldownTimer >
+            0f
         )
         {
             return false;
         }
 
-        StartLaneChange(
-            safeLane
-        );
 
-        return true;
-    }
+        int recoveryLane =
+            FindBestRecoveryLane();
 
 
-    //=========================================================
-    // FIND CLOSEST VEHICLE AHEAD
-    //=========================================================
-
-    private TrafficCarBehavior FindClosestVehicleAhead(
-        int lane
-    )
-    {
-        TrafficCarBehavior closest =
-            null;
-
-        float closestDistance =
-            float.MaxValue;
-
-        float laneX =
-            GetLaneX(lane);
-
-        for (
-            int i = 0;
-            i < allTraffic.Count;
-            i++
-        )
+        if (recoveryLane < 0)
         {
-            TrafficCarBehavior other =
-                allTraffic[i];
-
-            if (
-                other == null ||
-                other == this ||
-                !other.isActiveAndEnabled
-            )
-            {
-                continue;
-            }
-
-            if (
-                other.TravelDirection !=
-                TravelDirection
-            )
-            {
-                continue;
-            }
-
-            float xDistance =
-                Mathf.Abs(
-                    other.transform.position.x -
-                    laneX
+            stuckRecoveryCooldownTimer =
+                Mathf.Max(
+                    0.1f,
+                    stuckRecoveryCooldown
                 );
 
-            bool physicallyInLane =
-                xDistance <=
-                laneOccupancyTolerance;
-
-            bool logicalInLane =
-                other.LaneIndex ==
-                lane;
-
-            bool enteringLane =
-                other.IsChangingLane &&
-                other.TargetLane ==
-                lane;
-
-            if (
-                !physicallyInLane &&
-                !logicalInLane &&
-                !enteringLane
-            )
-            {
-                continue;
-            }
-
-            float distance =
-                GetForwardDistance(
-                    other
-                );
-
-            if (distance <= 0f)
-                continue;
-
-            if (
-                distance <
-                closestDistance
-            )
-            {
-                closestDistance =
-                    distance;
-
-                closest =
-                    other;
-            }
+            return false;
         }
 
-        return closest;
-    }
 
-
-    //=========================================================
-    // FORWARD DISTANCE
-    //=========================================================
-
-    private float GetForwardDistance(
-        TrafficCarBehavior other
-    )
-    {
-        if (other == null)
-            return -1f;
-
-        return GetForwardDistanceFromPosition(
-            other.transform.position
+        StartLaneChange(
+            recoveryLane
         );
-    }
 
 
-    private float GetForwardDistanceFromPosition(
-        Vector3 position
-    )
-    {
-        float raw =
-            position.z -
-            transform.position.z;
+        if (isChangingLane)
+        {
+            stuckRecoveryCooldownTimer =
+                Mathf.Max(
+                    0.1f,
+                    stuckRecoveryCooldown
+                );
 
-        if (TravelDirection >= 0)
-            return raw;
+            stuckTimer = 0f;
 
-        return -raw;
+            isStuck = false;
+
+
+            if (debugLogs)
+            {
+                Debug.Log(
+                    name +
+                    " | STUCK RECOVERY | " +
+                    laneIndex +
+                    " -> " +
+                    recoveryLane
+                );
+            }
+
+
+            return true;
+        }
+
+
+        return false;
     }
 
 
     //=========================================================
-    // FIND BEST ALTERNATIVE LANE
+    // FIND RECOVERY LANE
     //=========================================================
 
-    private int FindBestAlternativeLane()
+    private int FindBestRecoveryLane()
     {
         int bestLane = -1;
 
         float bestScore =
             float.MinValue;
+
 
         for (
             int lane = 0;
@@ -663,6 +811,11 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
+            //=================================================
+            // CHỈ ĐỔI 1 LANE
+            //=================================================
+
             if (
                 Mathf.Abs(
                     lane -
@@ -673,6 +826,11 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
+            //=================================================
+            // PLAYER BLOCK
+            //=================================================
+
             if (
                 IsPlayerBlockingSpecificLane(
                     lane
@@ -681,6 +839,7 @@ public class TrafficCarBehavior : MonoBehaviour
             {
                 continue;
             }
+
 
             if (
                 IsPlayerBlockingSpecificLaneChange(
@@ -691,8 +850,13 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
+            //=================================================
+            // TRAFFIC SAFETY
+            //=================================================
+
             if (
-                !IsLaneSafe(
+                !IsRecoveryLaneSafe(
                     lane
                 )
             )
@@ -700,10 +864,12 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float score =
-                GetLaneClearanceScore(
+                GetRecoveryLaneClearanceScore(
                     lane
                 );
+
 
             if (
                 score >
@@ -718,26 +884,29 @@ public class TrafficCarBehavior : MonoBehaviour
             }
         }
 
+
         return bestLane;
     }
 
 
     //=========================================================
-    // LANE CLEARANCE SCORE
+    // RECOVERY LANE SCORE
     //=========================================================
 
-    private float GetLaneClearanceScore(
+    private float GetRecoveryLaneClearanceScore(
         int lane
     )
     {
         float laneX =
             GetLaneX(lane);
 
+
         float frontClearance =
-            targetFrontSafety;
+            stuckFrontSafety;
 
         float rearClearance =
-            targetRearSafety;
+            stuckRearSafety;
+
 
         for (
             int i = 0;
@@ -748,6 +917,7 @@ public class TrafficCarBehavior : MonoBehaviour
             TrafficCarBehavior other =
                 allTraffic[i];
 
+
             if (
                 other == null ||
                 other == this ||
@@ -757,6 +927,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             if (
                 other.TravelDirection !=
                 TravelDirection
@@ -765,11 +936,13 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float xDistance =
                 Mathf.Abs(
                     other.transform.position.x -
                     laneX
                 );
+
 
             if (
                 xDistance >
@@ -779,10 +952,12 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float forwardDistance =
                 GetForwardDistance(
                     other
                 );
+
 
             if (
                 forwardDistance >= 0f
@@ -806,6 +981,645 @@ public class TrafficCarBehavior : MonoBehaviour
             }
         }
 
+
+        return
+            frontClearance +
+            rearClearance;
+    }
+
+
+    //=========================================================
+    // RECOVERY LANE SAFETY
+    //=========================================================
+
+    private bool IsRecoveryLaneSafe(
+        int candidateLane
+    )
+    {
+        if (
+            candidateLane < 0 ||
+            candidateLane > 2
+        )
+        {
+            return false;
+        }
+
+
+        if (
+            candidateLane ==
+            laneIndex
+        )
+        {
+            return false;
+        }
+
+
+        float targetX =
+            GetLaneX(
+                candidateLane
+            );
+
+
+        for (
+            int i = 0;
+            i < allTraffic.Count;
+            i++
+        )
+        {
+            TrafficCarBehavior other =
+                allTraffic[i];
+
+
+            if (
+                other == null ||
+                other == this ||
+                !other.isActiveAndEnabled
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                other.TravelDirection !=
+                TravelDirection
+            )
+            {
+                continue;
+            }
+
+
+            float xDistance =
+                Mathf.Abs(
+                    other.transform.position.x -
+                    targetX
+                );
+
+
+            bool occupiesLane =
+                xDistance <=
+                laneOccupancyTolerance;
+
+
+            bool enteringLane =
+                other.IsChangingLane &&
+                other.TargetLane ==
+                candidateLane;
+
+
+            if (
+                !occupiesLane &&
+                !enteringLane
+            )
+            {
+                continue;
+            }
+
+
+            float forwardDistance =
+                GetForwardDistance(
+                    other
+                );
+
+
+            //=================================================
+            // XE PHÍA TRƯỚC
+            //=================================================
+
+            if (
+                forwardDistance >= 0f &&
+                forwardDistance <
+                stuckFrontSafety
+            )
+            {
+                return false;
+            }
+
+
+            //=================================================
+            // XE PHÍA SAU
+            //=================================================
+
+            if (
+                forwardDistance < 0f &&
+                Mathf.Abs(
+                    forwardDistance
+                ) <
+                stuckRearSafety
+            )
+            {
+                return false;
+            }
+
+
+            //=================================================
+            // XE ĐANG ĐỔI LANE
+            //=================================================
+
+            if (
+                other.IsChangingLane &&
+                Mathf.Abs(
+                    forwardDistance
+                ) <
+                laneChangeBlockingDistance
+            )
+            {
+                return false;
+            }
+        }
+
+
+        //=====================================================
+        // CORRIDOR AN TOÀN
+        //=====================================================
+
+        if (
+            !IsRecoveryLaneChangeCorridorClear(
+                candidateLane
+            )
+        )
+        {
+            return false;
+        }
+
+
+        return true;
+    }
+
+
+    //=========================================================
+    // RECOVERY LANE CHANGE CORRIDOR
+    //=========================================================
+
+    private bool IsRecoveryLaneChangeCorridorClear(
+        int candidateLane
+    )
+    {
+        float startX =
+            transform.position.x;
+
+        float targetX =
+            GetLaneX(
+                candidateLane
+            );
+
+
+        float minX =
+            Mathf.Min(
+                startX,
+                targetX
+            ) -
+            lateralSafety;
+
+
+        float maxX =
+            Mathf.Max(
+                startX,
+                targetX
+            ) +
+            lateralSafety;
+
+
+        float recoveryCorridorDistance =
+            Mathf.Max(
+                stuckFrontSafety,
+                stuckRearSafety
+            );
+
+
+        for (
+            int i = 0;
+            i < allTraffic.Count;
+            i++
+        )
+        {
+            TrafficCarBehavior other =
+                allTraffic[i];
+
+
+            if (
+                other == null ||
+                other == this ||
+                !other.isActiveAndEnabled
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                other.TravelDirection !=
+                TravelDirection
+            )
+            {
+                continue;
+            }
+
+
+            float otherX =
+                other.transform.position.x;
+
+
+            if (
+                otherX < minX ||
+                otherX > maxX
+            )
+            {
+                continue;
+            }
+
+
+            float zDistance =
+                Mathf.Abs(
+                    other.transform.position.z -
+                    transform.position.z
+                );
+
+
+            if (
+                zDistance <
+                recoveryCorridorDistance
+            )
+            {
+                return false;
+            }
+        }
+
+
+        return true;
+    }
+
+
+    //=========================================================
+    // TRY CHANGE LANE
+    //=========================================================
+
+    private bool TryChangeLane()
+    {
+        if (
+            laneChangeCooldownTimer >
+            0f
+        )
+        {
+            return false;
+        }
+
+
+        int safeLane =
+            FindBestAlternativeLane();
+
+
+        if (safeLane < 0)
+            return false;
+
+
+        if (
+            Random.value >
+            laneChangeProbability
+        )
+        {
+            return false;
+        }
+
+
+        StartLaneChange(
+            safeLane
+        );
+
+
+        return isChangingLane;
+    }
+
+
+    //=========================================================
+    // FIND CLOSEST VEHICLE AHEAD
+    //=========================================================
+
+    private TrafficCarBehavior FindClosestVehicleAhead(
+        int lane
+    )
+    {
+        TrafficCarBehavior closest =
+            null;
+
+        float closestDistance =
+            float.MaxValue;
+
+
+        float laneX =
+            GetLaneX(lane);
+
+
+        for (
+            int i = 0;
+            i < allTraffic.Count;
+            i++
+        )
+        {
+            TrafficCarBehavior other =
+                allTraffic[i];
+
+
+            if (
+                other == null ||
+                other == this ||
+                !other.isActiveAndEnabled
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                other.TravelDirection !=
+                TravelDirection
+            )
+            {
+                continue;
+            }
+
+
+            float xDistance =
+                Mathf.Abs(
+                    other.transform.position.x -
+                    laneX
+                );
+
+
+            bool physicallyInLane =
+                xDistance <=
+                laneOccupancyTolerance;
+
+
+            bool logicalInLane =
+                other.LaneIndex ==
+                lane;
+
+
+            bool enteringLane =
+                other.IsChangingLane &&
+                other.TargetLane ==
+                lane;
+
+
+            if (
+                !physicallyInLane &&
+                !logicalInLane &&
+                !enteringLane
+            )
+            {
+                continue;
+            }
+
+
+            float distance =
+                GetForwardDistance(
+                    other
+                );
+
+
+            if (distance <= 0f)
+                continue;
+
+
+            if (
+                distance <
+                closestDistance
+            )
+            {
+                closestDistance =
+                    distance;
+
+                closest =
+                    other;
+            }
+        }
+
+
+        return closest;
+    }
+
+
+    //=========================================================
+    // FORWARD DISTANCE
+    //=========================================================
+
+    private float GetForwardDistance(
+        TrafficCarBehavior other
+    )
+    {
+        if (other == null)
+            return -1f;
+
+
+        return GetForwardDistanceFromPosition(
+            other.transform.position
+        );
+    }
+
+
+    private float GetForwardDistanceFromPosition(
+        Vector3 position
+    )
+    {
+        float raw =
+            position.z -
+            transform.position.z;
+
+
+        if (TravelDirection >= 0)
+            return raw;
+
+
+        return -raw;
+    }
+
+
+    //=========================================================
+    // FIND BEST ALTERNATIVE LANE
+    //=========================================================
+
+    private int FindBestAlternativeLane()
+    {
+        int bestLane = -1;
+
+        float bestScore =
+            float.MinValue;
+
+
+        for (
+            int lane = 0;
+            lane < 3;
+            lane++
+        )
+        {
+            if (
+                lane ==
+                laneIndex
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                Mathf.Abs(
+                    lane -
+                    laneIndex
+                ) != 1
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                IsPlayerBlockingSpecificLane(
+                    lane
+                )
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                IsPlayerBlockingSpecificLaneChange(
+                    lane
+                )
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                !IsLaneSafe(
+                    lane
+                )
+            )
+            {
+                continue;
+            }
+
+
+            float score =
+                GetLaneClearanceScore(
+                    lane
+                );
+
+
+            if (
+                score >
+                bestScore
+            )
+            {
+                bestScore =
+                    score;
+
+                bestLane =
+                    lane;
+            }
+        }
+
+
+        return bestLane;
+    }
+
+
+    //=========================================================
+    // LANE CLEARANCE SCORE
+    //=========================================================
+
+    private float GetLaneClearanceScore(
+        int lane
+    )
+    {
+        float laneX =
+            GetLaneX(lane);
+
+
+        float frontClearance =
+            targetFrontSafety;
+
+        float rearClearance =
+            targetRearSafety;
+
+
+        for (
+            int i = 0;
+            i < allTraffic.Count;
+            i++
+        )
+        {
+            TrafficCarBehavior other =
+                allTraffic[i];
+
+
+            if (
+                other == null ||
+                other == this ||
+                !other.isActiveAndEnabled
+            )
+            {
+                continue;
+            }
+
+
+            if (
+                other.TravelDirection !=
+                TravelDirection
+            )
+            {
+                continue;
+            }
+
+
+            float xDistance =
+                Mathf.Abs(
+                    other.transform.position.x -
+                    laneX
+                );
+
+
+            if (
+                xDistance >
+                laneOccupancyTolerance
+            )
+            {
+                continue;
+            }
+
+
+            float forwardDistance =
+                GetForwardDistance(
+                    other
+                );
+
+
+            if (
+                forwardDistance >= 0f
+            )
+            {
+                frontClearance =
+                    Mathf.Min(
+                        frontClearance,
+                        forwardDistance
+                    );
+            }
+            else
+            {
+                rearClearance =
+                    Mathf.Min(
+                        rearClearance,
+                        Mathf.Abs(
+                            forwardDistance
+                        )
+                    );
+            }
+        }
+
+
         return
             frontClearance +
             rearClearance;
@@ -828,6 +1642,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
+
         if (
             candidateLane ==
             laneIndex
@@ -836,8 +1651,10 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
+
         float targetX =
             GetLaneX(candidateLane);
+
 
         for (
             int i = 0;
@@ -848,6 +1665,7 @@ public class TrafficCarBehavior : MonoBehaviour
             TrafficCarBehavior other =
                 allTraffic[i];
 
+
             if (
                 other == null ||
                 other == this ||
@@ -857,6 +1675,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             if (
                 other.TravelDirection !=
                 TravelDirection
@@ -865,20 +1684,24 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float xDistance =
                 Mathf.Abs(
                     other.transform.position.x -
                     targetX
                 );
 
+
             bool occupiesLane =
                 xDistance <=
                 laneOccupancyTolerance;
+
 
             bool enteringLane =
                 other.IsChangingLane &&
                 other.TargetLane ==
                 candidateLane;
+
 
             if (
                 !occupiesLane &&
@@ -888,10 +1711,12 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float forwardDistance =
                 GetForwardDistance(
                     other
                 );
+
 
             if (
                 forwardDistance >= 0f &&
@@ -901,6 +1726,7 @@ public class TrafficCarBehavior : MonoBehaviour
             {
                 return false;
             }
+
 
             if (
                 forwardDistance < 0f &&
@@ -913,6 +1739,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 return false;
             }
 
+
             if (
                 other.IsChangingLane &&
                 Mathf.Abs(
@@ -924,6 +1751,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 return false;
             }
         }
+
 
         return IsLaneChangeCorridorClear(
             candidateLane
@@ -942,8 +1770,10 @@ public class TrafficCarBehavior : MonoBehaviour
         float startX =
             transform.position.x;
 
+
         float targetX =
             GetLaneX(candidateLane);
+
 
         float minX =
             Mathf.Min(
@@ -952,12 +1782,14 @@ public class TrafficCarBehavior : MonoBehaviour
             ) -
             lateralSafety;
 
+
         float maxX =
             Mathf.Max(
                 startX,
                 targetX
             ) +
             lateralSafety;
+
 
         for (
             int i = 0;
@@ -968,6 +1800,7 @@ public class TrafficCarBehavior : MonoBehaviour
             TrafficCarBehavior other =
                 allTraffic[i];
 
+
             if (
                 other == null ||
                 other == this ||
@@ -977,6 +1810,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             if (
                 other.TravelDirection !=
                 TravelDirection
@@ -985,8 +1819,10 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float otherX =
                 other.transform.position.x;
+
 
             if (
                 otherX <
@@ -998,11 +1834,13 @@ public class TrafficCarBehavior : MonoBehaviour
                 continue;
             }
 
+
             float zDistance =
                 Mathf.Abs(
                     other.transform.position.z -
                     transform.position.z
                 );
+
 
             if (
                 zDistance <
@@ -1015,6 +1853,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 return false;
             }
         }
+
 
         return true;
     }
@@ -1036,6 +1875,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return;
         }
 
+
         if (
             laneChangeCooldownTimer >
             0f
@@ -1044,12 +1884,14 @@ public class TrafficCarBehavior : MonoBehaviour
             return;
         }
 
+
         if (
             !IsLaneSafe(newLane)
         )
         {
             return;
         }
+
 
         targetLane =
             Mathf.Clamp(
@@ -1058,20 +1900,26 @@ public class TrafficCarBehavior : MonoBehaviour
                 2
             );
 
+
         laneStartX =
             transform.position.x;
+
 
         laneTargetX =
             GetLaneX(targetLane);
 
+
         laneChangeTimer =
             0f;
+
 
         currentLaneChangeDuration =
             GetLaneChangeDuration();
 
+
         isChangingLane =
             true;
+
 
         if (debugLogs)
         {
@@ -1095,8 +1943,10 @@ public class TrafficCarBehavior : MonoBehaviour
         if (!isChangingLane)
             return;
 
+
         laneChangeTimer +=
             Time.deltaTime;
+
 
         float progress =
             Mathf.Clamp01(
@@ -1119,8 +1969,10 @@ public class TrafficCarBehavior : MonoBehaviour
                 progress
             );
 
+
         Vector3 position =
             transform.position;
+
 
         position.x =
             Mathf.Lerp(
@@ -1128,6 +1980,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 laneTargetX,
                 smooth
             );
+
 
         transform.position =
             position;
@@ -1215,16 +2068,23 @@ public class TrafficCarBehavior : MonoBehaviour
                     transform.position.z
                 );
 
+
             laneIndex =
                 targetLane;
+
 
             isChangingLane =
                 false;
 
+
             laneChangeCooldownTimer =
                 laneChangeCooldown;
 
+
+            ResetStuckState();
+
             RestoreSpeed();
+
 
             if (debugLogs)
             {
@@ -1247,6 +2107,7 @@ public class TrafficCarBehavior : MonoBehaviour
         Quaternion targetRotation =
             Quaternion.identity;
 
+
         transform.rotation =
             Quaternion.Lerp(
                 transform.rotation,
@@ -1266,8 +2127,10 @@ public class TrafficCarBehavior : MonoBehaviour
         if (!useVehicleTypeSteering)
             return 1f;
 
+
         string vehicleName =
             gameObject.name.ToLower();
+
 
         //=====================================================
         // BUS
@@ -1326,6 +2189,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return 1f;
         }
 
+
         return 1f;
     }
 
@@ -1342,10 +2206,13 @@ public class TrafficCarBehavior : MonoBehaviour
         if (otherVehicle == null)
             return;
 
+
         float otherSpeed =
             otherVehicle.GetMoveSpeed();
 
+
         float targetSpeed;
+
 
         if (
             distance <=
@@ -1381,17 +2248,20 @@ public class TrafficCarBehavior : MonoBehaviour
                 brakingMultiplier;
         }
 
+
         targetSpeed =
             Mathf.Min(
                 targetSpeed,
                 otherSpeed
             );
 
+
         targetSpeed =
             Mathf.Max(
                 0.25f,
                 targetSpeed
             );
+
 
         vehicle.SetTemporarySpeed(
             targetSpeed
@@ -1407,6 +2277,7 @@ public class TrafficCarBehavior : MonoBehaviour
     {
         if (vehicle == null)
             return;
+
 
         vehicle.RestoreBaseSpeed();
     }
@@ -1429,16 +2300,20 @@ public class TrafficCarBehavior : MonoBehaviour
         GameObject player =
             FindPlayer();
 
+
         if (player == null)
             return false;
 
+
         Vector3 playerPosition =
             player.transform.position;
+
 
         float zDistance =
             GetForwardDistanceFromPosition(
                 playerPosition
             );
+
 
         if (
             Mathf.Abs(zDistance) >
@@ -1448,10 +2323,12 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
+
         float currentLaneX =
             GetLaneX(
                 laneIndex
             );
+
 
         if (
             Mathf.Abs(
@@ -1464,6 +2341,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return true;
         }
 
+
         if (isChangingLane)
         {
             return IsPlayerInsideLaneCorridor(
@@ -1472,6 +2350,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 targetLane
             );
         }
+
 
         if (laneIndex > 0)
         {
@@ -1487,6 +2366,7 @@ public class TrafficCarBehavior : MonoBehaviour
             }
         }
 
+
         if (laneIndex < 2)
         {
             if (
@@ -1500,6 +2380,7 @@ public class TrafficCarBehavior : MonoBehaviour
                 return true;
             }
         }
+
 
         return false;
     }
@@ -1516,13 +2397,16 @@ public class TrafficCarBehavior : MonoBehaviour
         GameObject player =
             FindPlayer();
 
+
         if (player == null)
             return false;
+
 
         float zDistance =
             GetForwardDistanceFromPosition(
                 player.transform.position
             );
+
 
         if (
             Mathf.Abs(zDistance) >
@@ -1532,8 +2416,10 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
+
         float laneX =
             GetLaneX(lane);
+
 
         return
             Mathf.Abs(
@@ -1555,16 +2441,20 @@ public class TrafficCarBehavior : MonoBehaviour
         GameObject player =
             FindPlayer();
 
+
         if (player == null)
             return false;
 
+
         Vector3 playerPosition =
             player.transform.position;
+
 
         float zDistance =
             GetForwardDistanceFromPosition(
                 playerPosition
             );
+
 
         if (
             zDistance >
@@ -1574,6 +2464,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return false;
         }
 
+
         if (
             zDistance <
             -playerRearBlockDistance
@@ -1581,6 +2472,7 @@ public class TrafficCarBehavior : MonoBehaviour
         {
             return false;
         }
+
 
         return IsPlayerInsideLaneCorridor(
             playerPosition,
@@ -1603,8 +2495,10 @@ public class TrafficCarBehavior : MonoBehaviour
         float fromX =
             GetLaneX(fromLane);
 
+
         float toX =
             GetLaneX(toLane);
+
 
         float minX =
             Mathf.Min(
@@ -1613,12 +2507,14 @@ public class TrafficCarBehavior : MonoBehaviour
             ) -
             playerLaneTolerance;
 
+
         float maxX =
             Mathf.Max(
                 fromX,
                 toX
             ) +
             playerLaneTolerance;
+
 
         return
             playerPosition.x >= minX &&
@@ -1635,6 +2531,7 @@ public class TrafficCarBehavior : MonoBehaviour
         string vehicleName =
             gameObject.name.ToLower();
 
+
         if (
             vehicleName.Contains("bus") ||
             vehicleName.Contains("coach")
@@ -1642,6 +2539,7 @@ public class TrafficCarBehavior : MonoBehaviour
         {
             return 2.4f;
         }
+
 
         if (
             vehicleName.Contains("bagac") ||
@@ -1653,6 +2551,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return 1.9f;
         }
 
+
         if (
             vehicleName.Contains("motor") ||
             vehicleName.Contains("motorcycle") ||
@@ -1663,6 +2562,7 @@ public class TrafficCarBehavior : MonoBehaviour
             return 0.85f;
         }
 
+
         if (
             vehicleName.Contains("car") ||
             vehicleName.Contains("vehicle") ||
@@ -1672,6 +2572,7 @@ public class TrafficCarBehavior : MonoBehaviour
         {
             return 1.4f;
         }
+
 
         return laneChangeDuration;
     }
@@ -1748,12 +2649,14 @@ public class TrafficCarBehavior : MonoBehaviour
         if (!drawDebugGizmos)
             return;
 
+
         float[] lanes =
         {
             leftLaneX,
             centerLaneX,
             rightLaneX
         };
+
 
         for (
             int i = 0;
@@ -1771,8 +2674,10 @@ public class TrafficCarBehavior : MonoBehaviour
             );
         }
 
+
         float currentX =
             GetLaneX(laneIndex);
+
 
         Gizmos.DrawLine(
             new Vector3(

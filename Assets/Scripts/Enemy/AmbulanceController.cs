@@ -3,6 +3,12 @@ using UnityEngine;
 
 public class AmbulanceController : MonoBehaviour
 {
+    [Header("Traffic Collision Precision")]
+
+    [Tooltip("Khoảng hở tối đa vẫn được xem là đang chạm xe.")]
+    [SerializeField]
+    private float trafficTouchTolerance = 0.2f;
+
     //=============================================================
     // MOVEMENT
     //=============================================================
@@ -135,10 +141,10 @@ public class AmbulanceController : MonoBehaviour
     [Header("Traffic Collision")]
 
     [SerializeField]
-    private float trafficCollisionRadius = 3.2f;
+    private float trafficCollisionRadius = 1.8f;
 
     [SerializeField]
-    private float trafficCollisionForwardDistance = 7f;
+    private float trafficCollisionForwardDistance = 3.2f;
 
     [SerializeField]
     private float trafficForwardForce = 22f;
@@ -684,6 +690,20 @@ public class AmbulanceController : MonoBehaviour
             CheckTrafficCollision();
         }
 
+    }
+
+
+    //=============================================================
+    // FIXED PHYSICS MOVEMENT
+    //=============================================================
+
+    private void FixedUpdate()
+    {
+        if (!initialized)
+            return;
+
+        if (isPhotonLaunched)
+            return;
 
         MoveAmbulance();
     }
@@ -758,15 +778,12 @@ public class AmbulanceController : MonoBehaviour
         targetSpeed +=
             Mathf.Max(0f, speedBonusOverPlayer);
 
-        // Giữ tốc độ tối thiểu cũ của Ambulance.
         targetSpeed =
             Mathf.Max(
                 targetSpeed,
                 minSpeed
             );
 
-        // Nếu bật fixed speed, fixedSpeed vẫn chỉ là
-        // mức sàn; Ambulance vẫn phải nhanh hơn Player.
         if (useFixedSpeed)
         {
             targetSpeed =
@@ -792,7 +809,6 @@ public class AmbulanceController : MonoBehaviour
             }
         }
 
-        // Không thấp hơn tốc độ đã đạt nếu giữ tốc độ bật.
         if (maintainCurrentSpeed)
         {
             targetSpeed =
@@ -1028,10 +1044,6 @@ public class AmbulanceController : MonoBehaviour
 
         //=========================================================
         // SHIELD
-        //
-        // Dùng toàn bộ Shield logic của PlayerController.
-        //
-        // KHÔNG ConsumeShield() trực tiếp ở Ambulance.
         //=========================================================
 
         if (
@@ -1040,13 +1052,6 @@ public class AmbulanceController : MonoBehaviour
             )
         )
         {
-            //=====================================================
-            // Một hit Shield hợp lệ có explosion collision effect.
-            // Những hit tiếp theo trong thời gian invulnerable
-            // sẽ không đi tới đây vì TryConsumeShield() chỉ
-            // bảo vệ Player và CheckPlayerCollision đang cooldown.
-            //=====================================================
-
             SpawnCollisionEffect(
                 GetImpactPosition(
                     player.transform
@@ -1512,56 +1517,40 @@ public class AmbulanceController : MonoBehaviour
     //=============================================================
 
     private bool IsPlayerPhotonActive(
-        PlayerController player
+        PlayerController playerController
     )
     {
-        if (player == null)
+        if (playerController == null)
+        {
             return false;
-
-
-        PhotonController photon =
-            player.GetComponent<PhotonController>();
-
-
-        if (photon == null)
-        {
-            photon =
-                player.GetComponentInChildren<PhotonController>(
-                    true
-                );
         }
 
 
-        if (photon == null)
+        PhotonController photonController =
+            playerController.GetComponent<PhotonController>();
+
+
+        if (photonController == null)
         {
-            photon =
-                player.GetComponentInParent<PhotonController>();
+            photonController =
+                playerController.GetComponentInChildren<PhotonController>();
         }
 
 
-        if (
-            photon != null &&
-            photon.IsPhotonActive
-        )
+        if (photonController == null)
         {
-            return true;
+            photonController =
+                playerController.GetComponentInParent<PhotonController>();
         }
 
 
-        PhotonStateReceiver receiver =
-            player.GetComponent<PhotonStateReceiver>();
-
-
-        if (
-            receiver != null &&
-            receiver.IsActive
-        )
+        if (photonController == null)
         {
-            return true;
+            return false;
         }
 
 
-        return false;
+        return photonController.IsPhotonActive;
     }
 
 
@@ -1749,6 +1738,9 @@ public class AmbulanceController : MonoBehaviour
         }
 
 
+        Physics.SyncTransforms();
+
+
         Vector3 start =
             transform.position;
 
@@ -1847,8 +1839,20 @@ public class AmbulanceController : MonoBehaviour
                 }
 
 
+                //=================================================
+                // QUAN TRỌNG:
+                // DÙNG COLLIDER THỰC TẾ ĐƯỢC OVERLAPCAPSULE
+                // THAY VÌ traffic.transform.position.
+                //=================================================
+
+                Vector3 closestPoint =
+                    hit.ClosestPoint(
+                        transform.position
+                    );
+
+
                 Vector3 offset =
-                    traffic.transform.position -
+                    closestPoint -
                     transform.position;
 
 
@@ -1880,7 +1884,7 @@ public class AmbulanceController : MonoBehaviour
                 if (
                     forwardDistance >
                     trafficCollisionForwardDistance +
-                    1.5f
+                    0.5f
                 )
                 {
                     continue;
@@ -1897,10 +1901,13 @@ public class AmbulanceController : MonoBehaviour
 
 
                 //=================================================
-                // QUAN TRỌNG:
-                //
-                // OverlapCapsule chỉ tìm ứng viên.
-                // Chưa được phép hất xe ở đây.
+                // PRECISION CHECK
+                //=================================================
+                // OverlapCapsule chỉ dùng để tìm ứng viên gần.
+                // Bắt buộc collider thực tế phải chạm nhau
+                // hoặc nằm trong trafficTouchTolerance.
+                // Điều này loại bỏ tình trạng Ambulance đánh
+                // Traffic từ quá xa.
                 //=================================================
 
                 if (
@@ -1990,8 +1997,78 @@ public class AmbulanceController : MonoBehaviour
                 }
 
 
+                //=================================================
+                // TÌM COLLIDER GẦN AMBULANCE NHẤT
+                //=================================================
+
+                Collider[] trafficColliders =
+                    traffic.GetComponentsInChildren<Collider>(
+                        true
+                    );
+
+
+                Vector3 closestPoint =
+                    traffic.transform.position;
+
+
+                float closestColliderDistance =
+                    float.MaxValue;
+
+
+                if (
+                    trafficColliders != null &&
+                    trafficColliders.Length > 0
+                )
+                {
+                    for (
+                        int c = 0;
+                        c < trafficColliders.Length;
+                        c++
+                    )
+                    {
+                        Collider trafficCollider =
+                            trafficColliders[c];
+
+
+                        if (
+                            trafficCollider == null ||
+                            !trafficCollider.enabled
+                        )
+                        {
+                            continue;
+                        }
+
+
+                        Vector3 point =
+                            trafficCollider.ClosestPoint(
+                                transform.position
+                            );
+
+
+                        float distance =
+                            (
+                                point -
+                                transform.position
+                            ).sqrMagnitude;
+
+
+                        if (
+                            distance <
+                            closestColliderDistance
+                        )
+                        {
+                            closestColliderDistance =
+                                distance;
+
+                            closestPoint =
+                                point;
+                        }
+                    }
+                }
+
+
                 Vector3 offset =
-                    traffic.transform.position -
+                    closestPoint -
                     transform.position;
 
 
@@ -2023,7 +2100,7 @@ public class AmbulanceController : MonoBehaviour
                 if (
                     forwardDistance >
                     trafficCollisionForwardDistance +
-                    2f
+                    0.5f
                 )
                 {
                     continue;
@@ -2040,7 +2117,9 @@ public class AmbulanceController : MonoBehaviour
 
 
                 //=================================================
-                // FALLBACK CŨNG PHẢI CHẠM THỰC SỰ
+                // PRECISION CHECK
+                //=================================================
+                // Fallback cũng phải tuân theo kiểm tra chạm thực tế.
                 //=================================================
 
                 if (
@@ -2053,17 +2132,17 @@ public class AmbulanceController : MonoBehaviour
                 }
 
 
-                float distance =
+                float distanceSqr =
                     offset.sqrMagnitude;
 
 
                 if (
-                    distance <
+                    distanceSqr <
                     closestDistance
                 )
                 {
                     closestDistance =
-                        distance;
+                        distanceSqr;
 
                     closestTraffic =
                         traffic;
@@ -2126,6 +2205,13 @@ public class AmbulanceController : MonoBehaviour
         }
 
 
+        //=========================================================
+        // COLLISION DISTANCE
+        //=========================================================
+
+        float touchTolerance = Mathf.Max(0f, trafficTouchTolerance);
+
+
         for (
             int i = 0;
             i < ambulanceColliders.Length;
@@ -2173,6 +2259,10 @@ public class AmbulanceController : MonoBehaviour
                 }
 
 
+                //=================================================
+                // 1. CHECK PENETRATION
+                //=================================================
+
                 Vector3 direction;
 
                 float distance;
@@ -2191,6 +2281,38 @@ public class AmbulanceController : MonoBehaviour
                         out direction,
                         out distance
                     )
+                )
+                {
+                    return true;
+                }
+
+
+                //=================================================
+                // 2. CHECK CLOSEST POINT
+                //=================================================
+
+                Vector3 pointA =
+                    ambulanceCollider.ClosestPoint(
+                        trafficCollider.bounds.center
+                    );
+
+
+                Vector3 pointB =
+                    trafficCollider.ClosestPoint(
+                        ambulanceCollider.bounds.center
+                    );
+
+
+                float closestDistance =
+                    Vector3.Distance(
+                        pointA,
+                        pointB
+                    );
+
+
+                if (
+                    closestDistance <=
+                    touchTolerance
                 )
                 {
                     return true;
@@ -2223,6 +2345,13 @@ public class AmbulanceController : MonoBehaviour
             return;
         }
 
+
+        //=========================================================
+        // CHỈ SPAWN EFFECT Ở ĐÂY.
+        //
+        // LaunchTraffic() KHÔNG spawn effect nữa,
+        // tránh tạo 2 explosion cho cùng một cú va chạm.
+        //=========================================================
 
         SpawnCollisionEffect(
             GetImpactPosition(
@@ -2292,12 +2421,12 @@ public class AmbulanceController : MonoBehaviour
         }
 
 
-        SpawnCollisionEffect(
-            GetImpactPosition(
-                traffic.transform
-            )
-        );
-
+        //=========================================================
+        // KHÔNG SPAWN COLLISION EFFECT Ở ĐÂY.
+        //
+        // HitTraffic() đã spawn effect trước khi gọi
+        // LaunchTraffic().
+        //=========================================================
 
         float safeSide =
             Mathf.Abs(sideDirection) > 0.01f
@@ -2412,6 +2541,9 @@ public class AmbulanceController : MonoBehaviour
         if (isPhotonLaunched)
             return;
 
+        if (rb == null)
+            return;
+
 
         Quaternion targetRotation =
             Quaternion.LookRotation(
@@ -2428,13 +2560,18 @@ public class AmbulanceController : MonoBehaviour
             );
 
 
-        transform.rotation =
+        Quaternion nextRotation =
             Quaternion.Slerp(
-                transform.rotation,
+                rb.rotation,
                 targetRotation,
                 rotationSpeed *
-                Time.deltaTime
+                Time.fixedDeltaTime
             );
+
+
+        rb.MoveRotation(
+            nextRotation
+        );
     }
 
 
@@ -2447,9 +2584,12 @@ public class AmbulanceController : MonoBehaviour
         if (isPhotonLaunched)
             return;
 
+        if (rb == null)
+            return;
+
 
         Vector3 position =
-            transform.position;
+            rb.position;
 
 
         position.x =
@@ -2457,17 +2597,21 @@ public class AmbulanceController : MonoBehaviour
                 position.x,
                 laneX,
                 laneSnapSpeed *
-                Time.deltaTime
+                Time.fixedDeltaTime
             );
 
 
         position.z +=
             currentSpeed *
-            Time.deltaTime;
+            Time.fixedDeltaTime;
 
 
-        transform.position =
-            position;
+        // Kinematic Rigidbody + MovePosition + Interpolation
+        // keeps movement synchronized with the physics loop
+        // and removes Update/physics transform jitter.
+        rb.MovePosition(
+            position
+        );
 
 
         SetForwardRotationSmooth();
@@ -2660,15 +2804,59 @@ public class AmbulanceController : MonoBehaviour
 
     private void OnValidate()
     {
-        minSpeed = Mathf.Max(0f, minSpeed);
-        maxSpeed = Mathf.Max(minSpeed, maxSpeed);
-        fixedSpeed = Mathf.Max(0f, fixedSpeed);
-        playerSpeedMultiplier = Mathf.Max(0f, playerSpeedMultiplier);
-        speedBonusOverPlayer = Mathf.Max(0f, speedBonusOverPlayer);
-        maxAmbulanceSpeed = Mathf.Max(minSpeed, maxAmbulanceSpeed);
-        catchUpDistance = Mathf.Max(0f, catchUpDistance);
-        catchUpSpeedBonus = Mathf.Max(0f, catchUpSpeedBonus);
-        accelerationSmoothTime = Mathf.Max(0.01f, accelerationSmoothTime);
+        minSpeed =
+            Mathf.Max(
+                0f,
+                minSpeed
+            );
+
+        maxSpeed =
+            Mathf.Max(
+                minSpeed,
+                maxSpeed
+            );
+
+        fixedSpeed =
+            Mathf.Max(
+                0f,
+                fixedSpeed
+            );
+
+        playerSpeedMultiplier =
+            Mathf.Max(
+                0f,
+                playerSpeedMultiplier
+            );
+
+        speedBonusOverPlayer =
+            Mathf.Max(
+                0f,
+                speedBonusOverPlayer
+            );
+
+        maxAmbulanceSpeed =
+            Mathf.Max(
+                minSpeed,
+                maxAmbulanceSpeed
+            );
+
+        catchUpDistance =
+            Mathf.Max(
+                0f,
+                catchUpDistance
+            );
+
+        catchUpSpeedBonus =
+            Mathf.Max(
+                0f,
+                catchUpSpeedBonus
+            );
+
+        accelerationSmoothTime =
+            Mathf.Max(
+                0.01f,
+                accelerationSmoothTime
+            );
     }
 
 
@@ -2724,83 +2912,4 @@ public class AmbulanceController : MonoBehaviour
             end
         );
     }
-}
-
-
-//=================================================================
-// TRAFFIC LAUNCH CLEANUP
-//=================================================================
-
-public class LaunchCleanup : MonoBehaviour
-{
-    private Rigidbody targetRigidbody;
-
-    private float destroyTime;
-
-    private bool initialized;
-
-
-    public void Initialize(
-        Rigidbody rb,
-        float lifetime
-    )
-    {
-        targetRigidbody =
-            rb;
-
-
-        destroyTime =
-            Time.time +
-            Mathf.Max(
-                0.1f,
-                lifetime
-            );
-
-
-        initialized =
-            true;
-    }
-
-
-    private void Update()
-    {
-        if (!initialized)
-            return;
-
-
-        if (
-            Time.time >=
-            destroyTime
-        )
-        {
-            Destroy(
-                gameObject
-            );
-        }
-    }
-
-
-    private void OnDestroy()
-    {
-        if (
-            targetRigidbody != null
-        )
-        {
-            targetRigidbody.linearVelocity =
-                Vector3.zero;
-
-            targetRigidbody.angularVelocity =
-                Vector3.zero;
-        }
-    }
-}
-
-
-//=================================================================
-// PHOTON STATE BRIDGE
-//=================================================================
-
-public class PhotonStateReceiver : MonoBehaviour
-{
-    public bool IsActive;
 }

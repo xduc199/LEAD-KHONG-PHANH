@@ -129,6 +129,18 @@ public class ShieldController : MonoBehaviour
 
 
     //=============================================================
+    // RUNTIME - SHIELD UPGRADE
+    //=============================================================
+
+    // Giá trị runtime lấy từ ItemUpgradeManager.
+    // Nếu ItemUpgradeManager chưa sẵn sàng,
+    // sẽ fallback về duration / maxHits trong Inspector.
+    private float activeDuration;
+
+    private int activeMaxHits;
+
+
+    //=============================================================
     // RUNTIME - SHIELD WARNING
     //=============================================================
 
@@ -197,18 +209,104 @@ public class ShieldController : MonoBehaviour
 
 
     //=============================================================
+    // APPLY SHIELD UPGRADE
+    //=============================================================
+
+    private void ApplyShieldUpgradeValues()
+    {
+        //=========================================================
+        // FALLBACK VỀ INSPECTOR
+        //=========================================================
+
+        activeDuration = duration;
+        activeMaxHits = maxHits;
+
+
+        //=========================================================
+        // KIỂM TRA UPGRADE MANAGER
+        //=========================================================
+
+        ItemUpgradeManager manager =
+            ItemUpgradeManager.Instance;
+
+        if (manager == null)
+            return;
+
+
+        //=========================================================
+        // LẤY DATA LEVEL HIỆN TẠI
+        //=========================================================
+
+        ItemUpgradeLevel levelData =
+            manager.GetCurrentLevelData(
+                UpgradeItemType.Shield
+            );
+
+        if (levelData == null)
+            return;
+
+
+        //=========================================================
+        // APPLY UPGRADE DATA
+        //
+        // Shield:
+        // duration -> duration
+        // value1   -> maxHits
+        //=========================================================
+
+        activeDuration =
+            Mathf.Max(
+                0.5f,
+                levelData.duration
+            );
+
+        activeMaxHits =
+    Mathf.Max(
+        1,
+        levelData.maxHits
+    );
+
+
+        //=========================================================
+        // DEBUG
+        //=========================================================
+
+        if (debugLogs)
+        {
+            Debug.Log(
+                "[ShieldController] Upgrade Applied | " +
+                "Level=" + levelData.level +
+                " | Duration=" + activeDuration +
+                " | Hits=" + activeMaxHits,
+                this
+            );
+        }
+    }
+
+
+    //=============================================================
     // ACTIVATE
     //=============================================================
 
     public void Activate()
     {
         //=========================================================
+        // APPLY UPGRADE
+        //
+        // Mỗi lần pickup Shield sẽ đọc level mới nhất.
+        //=========================================================
+
+        ApplyShieldUpgradeValues();
+
+
+        //=========================================================
         // SHIELD ĐÃ ACTIVE
         //=========================================================
 
         if (isActive)
         {
-            remainingTime = duration;
+            remainingTime =
+                activeDuration;
 
             ResetShieldWarning();
 
@@ -236,11 +334,12 @@ public class ShieldController : MonoBehaviour
 
         isActive = true;
 
-        remainingTime = duration;
+        remainingTime =
+            activeDuration;
 
         remainingHits =
             Mathf.Max(
-                maxHits,
+                activeMaxHits,
                 1
             );
 
@@ -278,7 +377,7 @@ public class ShieldController : MonoBehaviour
         {
             Debug.Log(
                 "[ShieldController] SHIELD ACTIVATED | " +
-                "Duration=" + duration +
+                "Duration=" + activeDuration +
                 " | Hits=" + remainingHits,
                 this
             );

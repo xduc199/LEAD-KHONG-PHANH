@@ -54,21 +54,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float maxX = 4.5f;
 
 
-    //=========================================================
-    // GUM
-    //=========================================================
-
-    [Header("Gum Boost Settings")]
-
-    [Tooltip("Thời gian Gum có hiệu lực.")]
-    [SerializeField] private float gumDuration = 5f;
-
-    [Tooltip("In log để kiểm tra Gum có thực sự kích hoạt.")]
-    [SerializeField] private bool gumDebug = true;
-
-    private bool isGumBoosted;
-
-    private float gumTimer;
+  
 
     private float currentHorizontalSpeed;
 
@@ -221,7 +207,12 @@ public class PlayerController : MonoBehaviour
     )]
     [SerializeField] private float rampRetriggerCooldown = 0.35f;
 
+    [Header("Ba Gac Ramp - Climb Speed")]
 
+    [Tooltip(
+        "Tốc độ cộng thêm khi Player đang leo ramp."
+    )]
+    [SerializeField] private float rampClimbSpeedBonus = 3f;
     //=========================================================
     // RAMP AIR CONTROL
     //=========================================================
@@ -313,6 +304,9 @@ public class PlayerController : MonoBehaviour
 
     private float rampCollisionProtectionTimer;
 
+    // True khi Player dang IgnoreCollision voi Ba Gac hien tai.
+    private bool rampPhysicsCollisionIgnored;
+
     private float verticalVelocity;
 
     private bool isGrounded = true;
@@ -332,19 +326,52 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // KNOCKBACK
-    //=========================================================
+// KNOCKBACK & IMPACT PHYSICS
+//=========================================================
 
-    [Header("Knockback & Physics Settings")]
+[Header("Knockback & Impact Physics")]
 
-    [SerializeField] private float oncomingKnockbackZ = -12f;
+[Tooltip("Lực hất ngang cơ bản.")]
+[SerializeField] private float knockbackForce = 22f;
 
-    [SerializeField] private float exciterKnockbackZ = 12f;
+[Tooltip("Lực hất lên.")]
+[SerializeField] private float upwardKnockbackY = 6.5f;
 
-    [SerializeField] private float upwardKnockbackY = 4.5f;
+[Tooltip("Lực xoay xe khi va chạm.")]
+[SerializeField] private float knockbackRollTorque = 5f;
 
-    [SerializeField] private float knockbackDrag = 2f;
+[Tooltip("Lực xoay nhẹ quanh trục Y.")]
+[SerializeField] private float knockbackYawTorque = 1f;
 
+[Tooltip("Damping của Rigidbody sau khi chết.")]
+[SerializeField] private float knockbackDrag = 1.5f;
+
+[Tooltip("Damping xoay sau khi chết.")]
+[SerializeField] private float knockbackAngularDrag = 3f;
+
+[Tooltip("Nhân lực khi va chạm mạnh.")]
+[SerializeField] private float strongImpactMultiplier = 1.35f;
+
+[Tooltip("Nhân lực khi va chạm nhẹ.")]
+[SerializeField] private float lightImpactMultiplier = 0.75f;
+
+[Tooltip("Tìm BoxCollider của Player trong toàn bộ hierarchy.")]
+[SerializeField] private bool findPlayerBoxColliderInChildren = true;
+
+[Tooltip("Bật toàn bộ debug collision/knockback.")]
+[SerializeField] private bool knockbackDebug = true;
+
+[Tooltip(
+    "Hiển thị Debug.DrawRay hướng knockback trong Scene View."
+)]
+[SerializeField] private bool knockbackDrawDebugRay = true;
+
+[Tooltip(
+    "Độ dài ray debug hướng knockback."
+)]
+[SerializeField] private float knockbackDebugRayLength = 3f;
+
+private BoxCollider playerBoxCollider;
 
     //=========================================================
     // DEATH WORLD SAFETY
@@ -440,22 +467,6 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float engineMaxDistance = 30f;
 
 
-    //=========================================================
-    // GUM AUDIO
-    //=========================================================
-
-    [Header("Gum Audio")]
-
-    [SerializeField] private AudioClip gumPickupSound;
-
-    [SerializeField] private AudioClip gumBoostSound;
-
-    [Range(0f, 1f)]
-    [SerializeField] private float gumPickupVolume = 0.9f;
-
-    [Range(0f, 1f)]
-    [SerializeField] private float gumBoostVolume = 0.85f;
-
 
     //=========================================================
     // SHIELD AUDIO
@@ -494,6 +505,7 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody rb;
 
+    private Coroutine impactGameOverCoroutine;
 
     //=========================================================
     // GAMEPLAY UI API
@@ -531,6 +543,22 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public float RampClimbSpeedBonus
+    {
+        get
+        {
+            if (rampState != RampState.Climbing)
+            {
+                return 0f;
+            }
+
+            return Mathf.Max(
+                0f,
+                rampClimbSpeedBonus
+            );
+        }
+    }
+
     public bool IsDead
     {
         get
@@ -549,35 +577,37 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // GUM PUBLIC API
-    //=========================================================
+// GUM PUBLIC API
+//=========================================================
 
-    public bool IsGumBoosted
+public bool IsGumBoosted
+{
+    get
     {
-        get
-        {
-            return isGumBoosted;
-        }
+        return
+            ItemManager.Instance != null &&
+            ItemManager.Instance.IsGumActive;
     }
+}
 
-    public float GumTimeRemaining
+public float GumTimeRemaining
+{
+    get
     {
-        get
-        {
-            return Mathf.Max(
-                0f,
-                gumTimer
-            );
-        }
-    }
+        if (ItemManager.Instance == null)
+            return 0f;
 
-    public float CurrentHorizontalSpeed
-    {
-        get
-        {
-            return currentHorizontalSpeed;
-        }
+        return ItemManager.Instance.GumTimeRemaining;
     }
+}
+
+public float CurrentHorizontalSpeed
+{
+    get
+    {
+        return currentHorizontalSpeed;
+    }
+}
 
 
     //=========================================================
@@ -601,7 +631,27 @@ public class PlayerController : MonoBehaviour
 
         CachePlayerRenderers();
 
+        FindPlayerBoxCollider();
+
         SetupPlayerAudio();
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "KNOCKBACK DEBUG READY | " +
+                "Player = " +
+                gameObject.name +
+                " | Rigidbody = " +
+                (rb != null ? "FOUND" : "NULL") +
+                " | BoxCollider = " +
+                (
+                    playerBoxCollider != null
+                        ? playerBoxCollider.name
+                        : "NULL"
+                )
+            );
+        }
     }
 
 
@@ -617,24 +667,13 @@ public class PlayerController : MonoBehaviour
         groundY =
             transform.position.y;
 
-        currentHorizontalSpeed =
-            Mathf.Max(
-                0f,
-                horizontalSpeed
-            );
+       currentHorizontalSpeed =
+    Mathf.Max(
+        0f,
+        horizontalSpeed
+    );
 
-        StartEngineAudio();
-
-        if (gumDebug)
-        {
-            Debug.Log(
-                "[PlayerController] " +
-                "START | Normal Horizontal Speed = " +
-                currentHorizontalSpeed +
-                " | Gum Speed = " +
-                gumHorizontalSpeed
-            );
-        }
+StartEngineAudio();
     }
 
 
@@ -998,46 +1037,30 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // GUM UPDATE
-    //=========================================================
+// GUM UPDATE
+//=========================================================
 
-    private void UpdateGum()
+private void UpdateGum()
+{
+    if (ItemManager.Instance == null)
     {
-        if (!isGumBoosted)
-        {
-            currentHorizontalSpeed =
-                horizontalSpeed;
-
-            return;
-        }
-
-        gumTimer -=
-            Time.deltaTime;
-
         currentHorizontalSpeed =
-            gumHorizontalSpeed;
+            horizontalSpeed;
 
-        if (
-            gumTimer <= 0f
-        )
-        {
-            gumTimer = 0f;
-
-            isGumBoosted = false;
-
-            currentHorizontalSpeed =
-                horizontalSpeed;
-
-            if (gumDebug)
-            {
-                Debug.Log(
-                    "[PlayerController] " +
-                    "GUM ENDED | Horizontal Speed = " +
-                    currentHorizontalSpeed
-                );
-            }
-        }
+        return;
     }
+
+    if (ItemManager.Instance.IsGumActive)
+    {
+        currentHorizontalSpeed =
+            ItemManager.Instance.GumHorizontalSpeed;
+    }
+    else
+    {
+        currentHorizontalSpeed =
+            horizontalSpeed;
+    }
+}
 
 
     //=========================================================
@@ -1068,6 +1091,57 @@ public class PlayerController : MonoBehaviour
         currentSpeed =
             rawSpeed *
             speedMultiplier;
+
+        //=====================================================
+        // BA GAC RAMP CLIMB SPEED
+        //
+        // Bonus được cộng SAU speedMultiplier và SAU maxSpeed
+        // của tốc độ thường.
+        //
+        // Ví dụ:
+        // Normal = 35
+        // Ramp Bonus = 3
+        // => Ramp Climb = 38
+        //
+        // Không sửa rawSpeed/maxSpeed để tránh ảnh hưởng
+        // gameplay bình thường.
+        //=====================================================
+
+        float activeRampSpeedBonus = 0f;
+
+        if (
+            rampState ==
+            RampState.Climbing
+        )
+        {
+            activeRampSpeedBonus =
+                Mathf.Max(
+                    0f,
+                    rampClimbSpeedBonus
+                );
+
+            currentSpeed +=
+                activeRampSpeedBonus;
+        }
+
+        if (
+            rampDebug &&
+            rampState ==
+            RampState.Climbing
+        )
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "RAMP CLIMB SPEED | " +
+                "Normal = " +
+                (currentSpeed -
+                 activeRampSpeedBonus).ToString("F2") +
+                " | Bonus = " +
+                activeRampSpeedBonus.ToString("F2") +
+                " | Final = " +
+                currentSpeed.ToString("F2")
+            );
+        }
 
         float xInput =
             Input.GetAxisRaw(
@@ -1591,384 +1665,368 @@ public class PlayerController : MonoBehaviour
     // GET SURFACE ROTATION
     //=========================================================
 
-    private Quaternion GetRampSurfaceRotation(Vector3 normal)
-{
-    Vector3 rampForward = GetRampTangentWorld();
-
-    if (rampForward.sqrMagnitude <= 0.0001f)
-        rampForward = transform.forward;
-
-    rampForward.Normalize();
-
-    normal.Normalize();
-
-    // Đảm bảo forward nằm trên mặt phẳng của tôn
-    Vector3 surfaceForward =
-        Vector3.ProjectOnPlane(
-            rampForward,
-            normal
-        );
-
-    if (surfaceForward.sqrMagnitude <= 0.0001f)
+    private Quaternion GetRampSurfaceRotation(
+        Vector3 normal
+    )
     {
-        surfaceForward =
+        Vector3 rampForward =
+            GetRampTangentWorld();
+
+        if (
+            rampForward.sqrMagnitude <=
+            0.0001f
+        )
+        {
+            rampForward =
+                transform.forward;
+        }
+
+        rampForward.Normalize();
+
+        normal.Normalize();
+
+        Vector3 surfaceForward =
             Vector3.ProjectOnPlane(
-                transform.forward,
+                rampForward,
                 normal
             );
+
+        if (
+            surfaceForward.sqrMagnitude <=
+            0.0001f
+        )
+        {
+            surfaceForward =
+                Vector3.ProjectOnPlane(
+                    transform.forward,
+                    normal
+                );
+        }
+
+        if (
+            surfaceForward.sqrMagnitude <=
+            0.0001f
+        )
+        {
+            surfaceForward =
+                Vector3.forward;
+        }
+
+        surfaceForward.Normalize();
+
+        if (
+            Vector3.Dot(
+                surfaceForward,
+                transform.forward
+            ) < 0f
+        )
+        {
+            surfaceForward =
+                -surfaceForward;
+        }
+
+        Quaternion surfaceRotation =
+            Quaternion.LookRotation(
+                surfaceForward,
+                normal
+            );
+
+        return surfaceRotation;
     }
 
-    if (surfaceForward.sqrMagnitude <= 0.0001f)
+//=========================================================
+// RAMP CLIMB
+//=========================================================
+
+private void UpdateRampClimb(
+    ref Vector3 newPosition
+)
+{
+    if (!enableRamp)
     {
-        surfaceForward = Vector3.forward;
+        CancelRamp();
+
+        newPosition.y =
+            groundY;
+
+        return;
     }
 
-    surfaceForward.Normalize();
-
-    // Không cho xe quay ngược đầu
     if (
-        Vector3.Dot(
-            surfaceForward,
-            transform.forward
-        ) < 0f
+        activeRampRoot == null ||
+        !usingRealRampPoints
     )
     {
-        surfaceForward = -surfaceForward;
+        CancelRamp();
+
+        newPosition.y =
+            groundY;
+
+        return;
     }
 
-    /*
-     * Đây là rotation BÁM THEO MẶT TÔN.
-     *
-     * surfaceForward = hướng chạy lên tôn
-     * normal          = pháp tuyến thực của tôn
-     *
-     * LookRotation sẽ tạo pitch + roll đúng theo
-     * hình học của mặt tôn.
-     */
-    Quaternion surfaceRotation =
-        Quaternion.LookRotation(
-            surfaceForward,
-            normal
+
+    //=====================================================
+    // MEASURE REAL PLAYER TRAVEL
+    //=====================================================
+
+    Vector3 currentLocal =
+        activeRampRoot.InverseTransformPoint(
+            newPosition
         );
 
-    return surfaceRotation;
+    Vector3 deltaLocal =
+        currentLocal -
+        lastRampPlayerLocal;
+
+    Vector3 flatDelta =
+        deltaLocal;
+
+    flatDelta.y =
+        0f;
+
+    float travelledThisFrame =
+        Vector3.Dot(
+            flatDelta,
+            activeRampDirectionLocal
+        );
+
+    if (
+        travelledThisFrame >
+        0f
+    )
+    {
+        rampDistanceTravelled +=
+            travelledThisFrame;
+    }
+
+    lastRampPlayerLocal =
+        currentLocal;
+
+    rampDistanceTravelled =
+        Mathf.Clamp(
+            rampDistanceTravelled,
+            0f,
+            activeRampLength
+        );
+
+    rampProgress =
+        Mathf.Clamp01(
+            rampDistanceTravelled /
+            Mathf.Max(
+                0.01f,
+                activeRampLength
+            )
+        );
+
+
+    //=====================================================
+    // FOLLOW REAL RAMP SURFACE
+    //=====================================================
+
+    RaycastHit surfaceHit;
+
+    bool hasSurface =
+        TryGetRampSurfaceHit(
+            newPosition,
+            out surfaceHit
+        );
+
+    if (hasSurface)
+    {
+        activeRampLastSurfaceNormal =
+            surfaceHit.normal;
+
+        activeRampLastSurfaceTangent =
+            Vector3.ProjectOnPlane(
+                GetRampTangentWorld(),
+                surfaceHit.normal
+            ).normalized;
+
+        newPosition.y =
+            surfaceHit.point.y +
+            rampPlayerSurfaceOffset +
+            rampSurfaceSkin;
+    }
+    else if (
+        allowRampMarkerFallback
+    )
+    {
+        Vector3 startWorld =
+            activeRampRoot.TransformPoint(
+                activeRampStartLocal
+            );
+
+        Vector3 endWorld =
+            activeRampRoot.TransformPoint(
+                activeRampEndLocal
+            );
+
+        Vector3 markerPosition =
+            Vector3.Lerp(
+                startWorld,
+                endWorld,
+                rampProgress
+            );
+
+        newPosition.y =
+            markerPosition.y +
+            rampPlayerSurfaceOffset;
+    }
+
+
+    //=====================================================
+    // RAMP COMPLETE
+    //=====================================================
+
+    if (
+        rampProgress >=
+        0.999f
+    )
+    {
+        StartRampLaunch(
+            ref newPosition
+        );
+    }
 }
 
-
     //=========================================================
-    // RAMP CLIMB
-    //=========================================================
+// START RAMP LAUNCH
+//=========================================================
 
-    private void UpdateRampClimb(
-        ref Vector3 newPosition
+private void StartRampLaunch(
+    ref Vector3 newPosition
+)
+{
+    if (
+        rampState !=
+        RampState.Climbing
     )
     {
-        if (!enableRamp)
-        {
-            CancelRamp();
-
-            newPosition.y =
-                groundY;
-
-            return;
-        }
-
-        if (
-            activeRampRoot == null ||
-            !usingRealRampPoints
-        )
-        {
-            CancelRamp();
-
-            newPosition.y =
-                groundY;
-
-            return;
-        }
-
-
-        //=====================================================
-        // MEASURE REAL PLAYER TRAVEL
-        //=====================================================
-
-        Vector3 currentLocal =
-            activeRampRoot.InverseTransformPoint(
-                newPosition
-            );
-
-        Vector3 deltaLocal =
-            currentLocal -
-            lastRampPlayerLocal;
-
-        Vector3 flatDelta =
-            deltaLocal;
-
-        flatDelta.y = 0f;
-
-        float travelledThisFrame =
-            Vector3.Dot(
-                flatDelta,
-                activeRampDirectionLocal
-            );
-
-        /*
-         * Không dùng forwardMove fallback.
-         *
-         * Ba Gác có thể di chuyển riêng.
-         * Progress phải dựa vào Player thực sự đi
-         * qua ramp.
-         */
-
-        if (
-            travelledThisFrame > 0f
-        )
-        {
-            rampDistanceTravelled +=
-                travelledThisFrame;
-        }
-
-        lastRampPlayerLocal =
-            currentLocal;
-
-        rampDistanceTravelled =
-            Mathf.Clamp(
-                rampDistanceTravelled,
-                0f,
-                activeRampLength
-            );
-
-        rampProgress =
-            Mathf.Clamp01(
-                rampDistanceTravelled /
-                Mathf.Max(
-                    0.01f,
-                    activeRampLength
-                )
-            );
-
-
-        //=====================================================
-        // FOLLOW REAL RAMP SURFACE
-        //=====================================================
-
-        RaycastHit surfaceHit;
-
-        bool hasSurface =
-            TryGetRampSurfaceHit(
-                newPosition,
-                out surfaceHit
-            );
-
-        if (hasSurface)
-        {
-            activeRampLastSurfaceNormal =
-                surfaceHit.normal;
-
-            activeRampLastSurfaceTangent =
-                Vector3.ProjectOnPlane(
-                    GetRampTangentWorld(),
-                    surfaceHit.normal
-                ).normalized;
-
-            newPosition.y =
-                surfaceHit.point.y +
-                rampPlayerSurfaceOffset +
-                rampSurfaceSkin;
-        }
-        else if (
-            allowRampMarkerFallback
-        )
-        {
-            Vector3 startWorld =
-                activeRampRoot.TransformPoint(
-                    activeRampStartLocal
-                );
-
-            Vector3 endWorld =
-                activeRampRoot.TransformPoint(
-                    activeRampEndLocal
-                );
-
-            Vector3 markerPosition =
-                Vector3.Lerp(
-                    startWorld,
-                    endWorld,
-                    rampProgress
-                );
-
-            /*
-             * Chỉ fallback nếu collider surface không raycast được.
-             * Không dùng SmoothStep nữa.
-             */
-
-            newPosition.y =
-                markerPosition.y +
-                rampPlayerSurfaceOffset;
-        }
-
-
-        //=====================================================
-        // SPEED BOOST WHILE CLIMBING
-        //=====================================================
-
-        float rampBoost =
-            Mathf.Max(
-                0f,
-                rampSpeedToLaunchBonus
-            );
-
-        float targetRampSpeed =
-            currentSpeed +
-            rampBoost;
-
-        currentSpeed =
-            Mathf.Min(
-                targetRampSpeed,
-                maxSpeed +
-                rampBoost
-            );
-
-
-        //=====================================================
-        // RAMP COMPLETE
-        //=====================================================
-
-        if (
-            rampProgress >=
-            0.999f
-        )
-        {
-            StartRampLaunch(
-                ref newPosition
-            );
-        }
+        return;
     }
 
 
-    //=========================================================
-    // START RAMP LAUNCH
-    //=========================================================
+    //=====================================================
+    // FINAL SURFACE POSITION
+    //=====================================================
 
-    private void StartRampLaunch(
-        ref Vector3 newPosition
+    RaycastHit finalHit;
+
+    if (
+        TryGetRampSurfaceHit(
+            newPosition,
+            out finalHit
+        )
     )
     {
-        if (
-            rampState !=
-            RampState.Climbing
-        )
-        {
-            return;
-        }
+        newPosition.y =
+            finalHit.point.y +
+            rampPlayerSurfaceOffset +
+            rampSurfaceSkin;
 
-        rampState =
-            RampState.Launching;
-
-        isGrounded =
-            false;
-
-
-        //=====================================================
-        // FINAL SURFACE POSITION
-        //=====================================================
-
-        RaycastHit finalHit;
-
-        if (
-            TryGetRampSurfaceHit(
-                newPosition,
-                out finalHit
-            )
-        )
-        {
-            newPosition.y =
-                finalHit.point.y +
-                rampPlayerSurfaceOffset +
-                rampSurfaceSkin;
-
-            activeRampLastSurfaceNormal =
-                finalHit.normal;
-        }
-
-
-        //=====================================================
-        // LAUNCH VELOCITY
-        //=====================================================
-
-        float speedBonus =
-            Mathf.Max(
-                0f,
-                currentSpeed -
-                baseSpeed
-            ) *
-            rampSpeedToLaunchBonus;
-
-        float launchVelocity =
-            jumpForce +
-            rampLaunchBonus +
-            speedBonus;
-
-        launchVelocity =
-            Mathf.Clamp(
-                launchVelocity,
-                0f,
-                rampMaxLaunchVelocity
-            );
-
-        verticalVelocity =
-            launchVelocity;
-
-
-        //=====================================================
-        // IMPORTANT:
-        // DO NOT TELEPORT TO RAMP END Z
-        //=====================================================
-
-        /*
-         * Tuyệt đối không:
-         *
-         * newPosition.z = rampEnd.z;
-         *
-         * Player giữ nguyên vị trí thực tế
-         * sau khi chạy hết ramp.
-         */
-
-
-        rampState =
-            RampState.Airborne;
-
-        rampCooldownTimer =
-            Mathf.Max(
-                0f,
-                rampRetriggerCooldown
-            );
-
-        rampCollisionProtectionTimer =
-            Mathf.Max(
-                0f,
-                rampLaunchCollisionProtection
-            );
-
-
-        activeRampCollider =
-            null;
-
-
-        if (rampDebug)
-        {
-            Debug.Log(
-                "[PlayerController] " +
-                "BA GAC RAMP COMPLETE | " +
-                "Distance = " +
-                rampDistanceTravelled.ToString("F2") +
-                "/" +
-                activeRampLength.ToString("F2") +
-                " | Launch = " +
-                verticalVelocity.ToString("F2")
-            );
-        }
+        activeRampLastSurfaceNormal =
+            finalHit.normal;
     }
 
+
+    //=====================================================
+    // LAUNCH VELOCITY
+    //=====================================================
+
+    float speedBonus =
+        Mathf.Max(
+            0f,
+            currentSpeed -
+            baseSpeed
+        ) *
+        rampSpeedToLaunchBonus;
+
+    float launchVelocity =
+        jumpForce +
+        rampLaunchBonus +
+        speedBonus;
+
+    launchVelocity =
+        Mathf.Clamp(
+            launchVelocity,
+            0f,
+            rampMaxLaunchVelocity
+        );
+
+    verticalVelocity =
+        launchVelocity;
+
+
+    //=====================================================
+    // CHANGE STATE
+    //=====================================================
+
+    rampState =
+        RampState.Airborne;
+
+    isGrounded =
+        false;
+
+
+    //=====================================================
+    // RAMP COOLDOWN
+    //=====================================================
+
+    rampCooldownTimer =
+        Mathf.Max(
+            0f,
+            rampRetriggerCooldown
+        );
+
+
+    //=====================================================
+    // RESTORE BA GAC COLLISION
+    //
+    // Player chỉ Ignore Ba Gac trong lúc Climbing.
+    // Khi rời ramp phải bật collision lại ngay.
+    //=====================================================
+
+    RestoreActiveRampCollisions();
+
+
+    //=====================================================
+    // POST-LAUNCH COLLISION PROTECTION
+    //=====================================================
+
+    rampCollisionProtectionTimer =
+        Mathf.Max(
+            0f,
+            rampLaunchCollisionProtection
+        );
+
+
+    //=====================================================
+    // CLEAR ACTIVE RAMP TRIGGER
+    //=====================================================
+
+    activeRampCollider =
+        null;
+
+
+    //=====================================================
+    // DEBUG
+    //=====================================================
+
+    if (rampDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "BA GAC RAMP COMPLETE | " +
+            "Distance = " +
+            rampDistanceTravelled.ToString("F2") +
+            "/" +
+            activeRampLength.ToString("F2") +
+            " | Launch = " +
+            verticalVelocity.ToString("F2")
+        );
+    }
+}
 
     //=========================================================
     // AIRBORNE
@@ -1985,11 +2043,6 @@ public class PlayerController : MonoBehaviour
         newPosition.y +=
             verticalVelocity *
             Time.deltaTime;
-
-
-        //=====================================================
-        // LAND
-        //=====================================================
 
         float landingY =
             groundY +
@@ -2041,6 +2094,173 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    //=========================================================
+// RAMP COLLISION CONTROL
+//=========================================================
+
+private void IgnoreActiveRampCollisions()
+{
+    if (
+        activeRampRoot == null
+    )
+    {
+        return;
+    }
+
+    Collider[] playerColliders =
+        GetComponentsInChildren<Collider>(
+            true
+        );
+
+    Collider[] rampColliders =
+        activeRampRoot.root.GetComponentsInChildren<Collider>(
+            true
+        );
+
+    bool ignoredAnyCollision = false;
+
+    for (int i = 0; i < playerColliders.Length; i++)
+    {
+        Collider playerCollider =
+            playerColliders[i];
+
+        if (playerCollider == null)
+            continue;
+
+        for (int j = 0; j < rampColliders.Length; j++)
+        {
+            Collider rampCollider =
+                rampColliders[j];
+
+            if (rampCollider == null)
+                continue;
+
+            // Chi tat collision vat ly. RampTrigger van giu Trigger.
+            if (rampCollider.isTrigger)
+                continue;
+
+            if (playerCollider == rampCollider)
+                continue;
+
+            if (
+                rampCollider.transform.IsChildOf(
+                    transform
+                )
+            )
+            {
+                continue;
+            }
+
+            Physics.IgnoreCollision(
+                playerCollider,
+                rampCollider,
+                true
+            );
+
+            ignoredAnyCollision = true;
+        }
+    }
+
+    rampPhysicsCollisionIgnored =
+        ignoredAnyCollision;
+
+    if (rampDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "RAMP PHYSICS COLLISION IGNORED | " +
+            "Root = " +
+            activeRampRoot.root.name
+        );
+    }
+}
+
+
+//=========================================================
+// RESTORE RAMP COLLISION
+//=========================================================
+
+private void RestoreActiveRampCollisions()
+{
+    if (
+        !rampPhysicsCollisionIgnored
+    )
+    {
+        return;
+    }
+
+    if (
+        activeRampRoot == null
+    )
+    {
+        rampPhysicsCollisionIgnored =
+            false;
+
+        return;
+    }
+
+    Collider[] playerColliders =
+        GetComponentsInChildren<Collider>(
+            true
+        );
+
+    Collider[] rampColliders =
+        activeRampRoot.root.GetComponentsInChildren<Collider>(
+            true
+        );
+
+    for (int i = 0; i < playerColliders.Length; i++)
+    {
+        Collider playerCollider =
+            playerColliders[i];
+
+        if (playerCollider == null)
+            continue;
+
+        for (int j = 0; j < rampColliders.Length; j++)
+        {
+            Collider rampCollider =
+                rampColliders[j];
+
+            if (rampCollider == null)
+                continue;
+
+            if (rampCollider.isTrigger)
+                continue;
+
+            if (playerCollider == rampCollider)
+                continue;
+
+            if (
+                rampCollider.transform.IsChildOf(
+                    transform
+                )
+            )
+            {
+                continue;
+            }
+
+            Physics.IgnoreCollision(
+                playerCollider,
+                rampCollider,
+                false
+            );
+        }
+    }
+
+    rampPhysicsCollisionIgnored =
+        false;
+
+    if (rampDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "RAMP PHYSICS COLLISION RESTORED | " +
+            "Root = " +
+            activeRampRoot.root.name
+        );
+    }
+}
 
     //=========================================================
     // BEGIN RAMP
@@ -2081,7 +2301,6 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-
         activeRampCollider =
             rampCollider;
 
@@ -2094,7 +2313,6 @@ public class PlayerController : MonoBehaviour
         usingRealRampPoints =
             false;
 
-
         if (!SetupRampPoints())
         {
             activeRampCollider =
@@ -2103,9 +2321,15 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-
+        // Set Climbing BEFORE disabling physical collision.
+        // PhotonController can receive its collision callback independently
+        // in the same physics step. The state must already be Climbing.
         rampState =
             RampState.Climbing;
+
+        // Player bam theo RampSurface bang Raycast,
+        // nen trong luc Climbing khong de collision vat ly cua Ba Gac can xe.
+        IgnoreActiveRampCollisions();
 
         rampProgress =
             0f;
@@ -2130,7 +2354,6 @@ public class PlayerController : MonoBehaviour
                 transform.position
             );
 
-
         if (rampDebug)
         {
             Debug.Log(
@@ -2149,237 +2372,204 @@ public class PlayerController : MonoBehaviour
     // CANCEL RAMP
     //=========================================================
 
-    private void CancelRamp()
-    {
-        rampState =
-            RampState.None;
+   private void CancelRamp()
+{
+    RestoreActiveRampCollisions();
 
-        rampProgress =
-            0f;
+    rampState =
+        RampState.None;
 
-        rampDistanceTravelled =
-            0f;
+    rampProgress =
+        0f;
 
-        verticalVelocity =
-            0f;
+    rampDistanceTravelled =
+        0f;
 
-        isGrounded =
-            true;
+    verticalVelocity =
+        0f;
 
-        activeRampCollider =
-            null;
+    isGrounded =
+        true;
 
-        activeRampSurfaceCollider =
-            null;
+    activeRampCollider =
+        null;
 
-        activeRampRoot =
-            null;
+    activeRampSurfaceCollider =
+        null;
 
-        activeRampStartPoint =
-            null;
+    activeRampRoot =
+        null;
 
-        activeRampEndPoint =
-            null;
+    activeRampStartPoint =
+        null;
 
-        usingRealRampPoints =
-            false;
-    }
+    activeRampEndPoint =
+        null;
+
+    usingRealRampPoints =
+        false;
+}
 
 
     //=========================================================
     // ROTATION
     //=========================================================
 
-    private void HandleRotation(float xInput)
-{
-    float targetY = xInput * maxTurnAngle;
-    float targetZ = -xInput * maxLeanAngle;
-
-    //=====================================================
-    // RAMP - BÁM ĐÚNG HƯỚNG + ĐỘ NGHIÊNG CỦA MẶT TÔN
-    //=====================================================
-
-    if (rampState == RampState.Climbing)
+    private void HandleRotation(
+        float xInput
+    )
     {
-        Vector3 normal = activeRampLastSurfaceNormal;
+        float targetY =
+            xInput *
+            maxTurnAngle;
 
-        if (normal.sqrMagnitude <= 0.001f)
-        {
-            normal = Vector3.up;
-        }
+        float targetZ =
+            -xInput *
+            maxLeanAngle;
 
-        normal.Normalize();
-
-        // Hướng chạy dọc theo mặt tôn
-        Vector3 rampForward = GetRampTangentWorld();
-
-        // Đảm bảo hướng chạy nằm trên mặt phẳng của tôn
-        rampForward = Vector3.ProjectOnPlane(
-            rampForward,
-            normal
-        );
-
-        if (rampForward.sqrMagnitude <= 0.001f)
-        {
-            rampForward = transform.forward;
-            rampForward = Vector3.ProjectOnPlane(
-                rampForward,
-                normal
-            );
-        }
-
-        rampForward.Normalize();
-
-        // Nếu hướng bị ngược thì đảo lại
-        if (Vector3.Dot(rampForward, transform.forward) < 0f)
-        {
-            rampForward = -rampForward;
-        }
-
-        //=================================================
-        // ROTATION BÁM MẶT TÔN
-        //=================================================
-
-        Quaternion rampRotation = Quaternion.LookRotation(
-            rampForward,
-            normal
-        );
-
-        //=================================================
-        // ĐIỀU KHIỂN LÀN
-        // Chỉ thêm yaw/lean, KHÔNG phá pitch của ramp
-        //=================================================
-
-        Quaternion laneRotation = Quaternion.Euler(
-            0f,
-            targetY,
-            targetZ
-        );
-
-        Quaternion targetRotation =
-            rampRotation * laneRotation;
-
-        transform.rotation = Quaternion.Lerp(
-            transform.rotation,
-            targetRotation,
-            Time.deltaTime * rotationSpeed
-        );
-
-        return;
-    }
-
-
-    //=====================================================
-    // AIRBORNE
-    //=====================================================
-
-    if (rampState == RampState.Airborne)
-    {
-        float targetPitch = Mathf.Clamp(
-            -verticalVelocity * 0.22f,
-            -18f,
-            18f
-        );
-
-        Quaternion targetRotation = Quaternion.Euler(
-            targetPitch,
-            targetY,
-            targetZ
-        );
-
-        transform.rotation = Quaternion.Lerp(
-            transform.rotation,
-            targetRotation,
-            Time.deltaTime * rotationSpeed
-        );
-
-        return;
-    }
-
-
-    //=====================================================
-    // NORMAL
-    //=====================================================
-
-    Quaternion normalRotation = Quaternion.Euler(
-        0f,
-        targetY,
-        targetZ
-    );
-
-    transform.rotation = Quaternion.Lerp(
-        transform.rotation,
-        normalRotation,
-        Time.deltaTime * rotationSpeed
-    );
-}
-
-
-    //=========================================================
-    // ACTIVATE GUM
-    //=========================================================
-
-    public void ActivateGumBoost()
-    {
         if (
-            gumHorizontalSpeed <=
-            0f
+            rampState ==
+            RampState.Climbing
         )
         {
-            Debug.LogWarning(
-                "[PlayerController] " +
-                "gumHorizontalSpeed <= 0!"
-            );
+            Vector3 normal =
+                activeRampLastSurfaceNormal;
+
+            if (
+                normal.sqrMagnitude <=
+                0.001f
+            )
+            {
+                normal =
+                    Vector3.up;
+            }
+
+            normal.Normalize();
+
+            Vector3 rampForward =
+                GetRampTangentWorld();
+
+            rampForward =
+                Vector3.ProjectOnPlane(
+                    rampForward,
+                    normal
+                );
+
+            if (
+                rampForward.sqrMagnitude <=
+                0.001f
+            )
+            {
+                rampForward =
+                    transform.forward;
+
+                rampForward =
+                    Vector3.ProjectOnPlane(
+                        rampForward,
+                        normal
+                    );
+            }
+
+            rampForward.Normalize();
+
+            if (
+                Vector3.Dot(
+                    rampForward,
+                    transform.forward
+                ) < 0f
+            )
+            {
+                rampForward =
+                    -rampForward;
+            }
+
+            Quaternion rampRotation =
+                Quaternion.LookRotation(
+                    rampForward,
+                    normal
+                );
+
+            Quaternion laneRotation =
+                Quaternion.Euler(
+                    0f,
+                    targetY,
+                    targetZ
+                );
+
+            Quaternion targetRotation =
+                rampRotation *
+                laneRotation;
+
+            transform.rotation =
+                Quaternion.Lerp(
+                    transform.rotation,
+                    targetRotation,
+                    Time.deltaTime *
+                    rotationSpeed
+                );
 
             return;
         }
 
-        float oldSpeed =
-            currentHorizontalSpeed;
 
-        bool wasAlreadyBoosted =
-            isGumBoosted;
+        //=====================================================
+        // AIRBORNE
+        //=====================================================
 
-        isGumBoosted =
-            true;
+        if (
+            rampState ==
+            RampState.Airborne
+        )
+        {
+            float targetPitch =
+                Mathf.Clamp(
+                    -verticalVelocity *
+                    0.22f,
+                    -18f,
+                    18f
+                );
 
-        gumTimer =
-            Mathf.Max(
+            Quaternion targetRotation =
+                Quaternion.Euler(
+                    targetPitch,
+                    targetY,
+                    targetZ
+                );
+
+            transform.rotation =
+                Quaternion.Lerp(
+                    transform.rotation,
+                    targetRotation,
+                    Time.deltaTime *
+                    rotationSpeed
+                );
+
+            return;
+        }
+
+
+        //=====================================================
+        // NORMAL
+        //=====================================================
+
+        Quaternion normalRotation =
+            Quaternion.Euler(
                 0f,
-                gumDuration
+                targetY,
+                targetZ
             );
 
-        currentHorizontalSpeed =
-            gumHorizontalSpeed;
-
-        PlayPlayerSFX(
-            gumPickupSound,
-            gumPickupVolume
-        );
-
-        if (!wasAlreadyBoosted)
-        {
-            PlayPlayerSFX(
-                gumBoostSound,
-                gumBoostVolume
+        transform.rotation =
+            Quaternion.Lerp(
+                transform.rotation,
+                normalRotation,
+                Time.deltaTime *
+                rotationSpeed
             );
-        }
-
-        if (gumDebug)
-        {
-            Debug.Log(
-                "[PlayerController] " +
-                "GUM ACTIVATED! " +
-                oldSpeed +
-                " -> " +
-                currentHorizontalSpeed +
-                " | Duration = " +
-                gumTimer
-            );
-        }
     }
 
 
+   
     //=========================================================
     // FIND SHIELD
     //=========================================================
@@ -2580,13 +2770,23 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // APPLY KNOCKBACK
+    // APPLY LEGACY KNOCKBACK
     //=========================================================
 
     public void ApplyKnockback(
         Vector3 force
     )
     {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "LEGACY ApplyKnockback CALLED | " +
+                "Force = " +
+                force
+            );
+        }
+
         if (isDead)
             return;
 
@@ -2613,11 +2813,400 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        KillPlayer(
+        Vector3 horizontalForce =
+            force;
+
+        horizontalForce.y =
+            0f;
+
+        if (
+            horizontalForce.sqrMagnitude >
+            0.001f
+        )
+        {
+            horizontalForce.Normalize();
+        }
+        else
+        {
+            horizontalForce =
+                -transform.forward;
+        }
+
+        float horizontalMagnitude =
+            new Vector3(
+                force.x,
+                0f,
+                force.z
+            ).magnitude;
+
+        if (
+            horizontalMagnitude <=
+            0.001f
+        )
+        {
+            horizontalMagnitude =
+                knockbackForce;
+        }
+
+        Vector3 finalForce =
+            horizontalForce *
+            horizontalMagnitude;
+
+        finalForce.y =
+            force.y;
+
+        KillPlayerWithImpact(
+            finalForce,
+            horizontalForce,
+            1f
+        );
+    }
+
+    //=========================================================
+// EXCITER KNOCKBACK
+//
+// Dành riêng cho trường hợp EXCITER húc PLAYER.
+//
+// Mục tiêu:
+// - Bay mạnh về phía trước
+// - Bốc đầu
+// - Xoay/lộn nhiều vòng
+// - Không ảnh hưởng knockback thường
+//=========================================================
+
+public void ApplyExciterKnockback(
+    Vector3 force
+)
+{
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "EXCITER KNOCKBACK CALLED | " +
+            "Force = " +
             force
         );
     }
 
+    if (isDead)
+        return;
+
+    if (
+        rampCollisionProtectionTimer >
+        0f
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "EXCITER KNOCKBACK BLOCKED | " +
+                "Ramp protection."
+            );
+        }
+
+        return;
+    }
+
+    if (
+        photonController != null &&
+        photonController.IsPhotonActive
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "EXCITER KNOCKBACK BLOCKED | " +
+                "Photon active."
+            );
+        }
+
+        return;
+    }
+
+    if (
+        TryConsumeShield(null)
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "EXCITER KNOCKBACK BLOCKED | " +
+                "Shield."
+            );
+        }
+
+        return;
+    }
+
+
+    //=====================================================
+    // PLAYER DEAD
+    //=====================================================
+
+    isDead =
+        true;
+
+    StopEngineAudio();
+
+
+    //=====================================================
+    // RAMP RESET
+    //=====================================================
+
+    rampState =
+        RampState.None;
+
+    activeRampCollider =
+        null;
+
+    activeRampSurfaceCollider =
+        null;
+
+    activeRampRoot =
+        null;
+
+    rampCollisionProtectionTimer =
+        0f;
+
+
+    //=====================================================
+    // RESTORE RENDERERS
+    //=====================================================
+
+    if (
+        shieldFlashCoroutine != null
+    )
+    {
+        StopCoroutine(
+            shieldFlashCoroutine
+        );
+
+        shieldFlashCoroutine =
+            null;
+
+        RestorePlayerRenderers();
+    }
+
+
+    //=====================================================
+    // RIGIDBODY
+    //=====================================================
+
+    if (rb != null)
+    {
+        rb.isKinematic =
+            false;
+
+        rb.useGravity =
+            true;
+
+        rb.detectCollisions =
+            true;
+
+        rb.constraints =
+            RigidbodyConstraints.None;
+
+        rb.interpolation =
+            RigidbodyInterpolation.Interpolate;
+
+        rb.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousDynamic;
+
+        rb.linearDamping =
+            0.12f;
+
+        rb.angularDamping =
+            0.12f;
+
+
+        //=================================================
+        // RESET
+        //=================================================
+
+        rb.linearVelocity =
+            Vector3.zero;
+
+        rb.angularVelocity =
+            Vector3.zero;
+
+
+        //=================================================
+        // FORWARD DIRECTION
+        //
+        // Exciter truyền force vào đây.
+        // Ta giữ hướng ngang của force nhưng ép thành
+        // hướng bay tương đối với Player.
+        //=================================================
+
+        Vector3 horizontalForce =
+            force;
+
+        horizontalForce.y =
+            0f;
+
+        if (
+            horizontalForce.sqrMagnitude <
+            0.001f
+        )
+        {
+            horizontalForce =
+                transform.forward;
+        }
+        else
+        {
+            horizontalForce.Normalize();
+        }
+
+
+        //=================================================
+        // BAY XA
+        //=================================================
+
+        float forwardVelocity =
+            28f;
+
+        float upwardVelocity =
+            18f;
+
+        Vector3 launchVelocity =
+            horizontalForce *
+            forwardVelocity;
+
+        launchVelocity.y =
+            upwardVelocity;
+
+        rb.linearVelocity =
+            launchVelocity;
+
+
+        //=================================================
+        // BỐC ĐẦU
+        //
+        // Xoay quanh trục RIGHT của Player.
+        //
+        // Mục tiêu:
+        // đầu xe ngửa lên mạnh khi vừa bị húc.
+        //=================================================
+
+        Vector3 wheelieTorque =
+            transform.right *
+            -32f;
+
+        rb.AddTorque(
+            wheelieTorque,
+            ForceMode.Impulse
+        );
+
+
+        //=================================================
+        // XOAY NHIỀU VÒNG
+        //
+        // Thêm rotation theo trục forward.
+        // Đây là spin/roll của chiếc Lead.
+        //=================================================
+
+        Vector3 spinTorque =
+            transform.forward *
+            42f;
+
+        rb.AddTorque(
+            spinTorque,
+            ForceMode.Impulse
+        );
+
+
+        //=================================================
+        // YAW NHẸ
+        //
+        // Cho cú húc nhìn tự nhiên hơn.
+        //=================================================
+
+        Vector3 yawTorque =
+            transform.up *
+            12f;
+
+        rb.AddTorque(
+            yawTorque,
+            ForceMode.Impulse
+        );
+
+
+        //=================================================
+        // ĐẶT ANGULAR VELOCITY TRỰC TIẾP
+        //
+        // Đây là phần quan trọng nhất.
+        //
+        // 18 rad/s ≈ 2.86 vòng/giây.
+        // Với thời gian bay ~1s có thể thấy nhiều vòng.
+        //=================================================
+
+        Vector3 angularVelocity =
+            transform.right *
+            -18f;
+
+        angularVelocity +=
+            transform.forward *
+            22f;
+
+        angularVelocity +=
+            transform.up *
+            4f;
+
+        rb.angularVelocity =
+            angularVelocity;
+
+
+        //=================================================
+        // DEBUG
+        //=================================================
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "EXCITER LAUNCH\n" +
+                "LinearVelocity = " +
+                rb.linearVelocity +
+                "\n" +
+                "AngularVelocity = " +
+                rb.angularVelocity
+            );
+        }
+    }
+
+
+    //=====================================================
+    // EXPLOSION
+    //=====================================================
+
+    SpawnImpactExplosion(
+        transform.position
+    );
+
+
+    //=====================================================
+    // GAME OVER
+    //
+    // Cho Player có thời gian bay trước khi GameOver.
+    //=====================================================
+
+    if (
+        impactGameOverCoroutine != null
+    )
+    {
+        StopCoroutine(
+            impactGameOverCoroutine
+        );
+    }
+
+    impactGameOverCoroutine =
+        StartCoroutine(
+            DelayedExciterGameOver()
+        );
+}
 
     //=========================================================
     // KILL PLAYER
@@ -2645,178 +3234,193 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        isDead =
-            true;
+        Vector3 direction =
+            force;
 
-        StopEngineAudio();
-
-        rampState =
-            RampState.None;
-
-        activeRampCollider =
-            null;
-
-        activeRampSurfaceCollider =
-            null;
-
-        activeRampRoot =
-            null;
-
-        rampCollisionProtectionTimer =
+        direction.y =
             0f;
 
         if (
-            shieldFlashCoroutine != null
+            direction.sqrMagnitude <
+            0.001f
         )
         {
-            StopCoroutine(
-                shieldFlashCoroutine
-            );
-
-            shieldFlashCoroutine =
-                null;
-
-            RestorePlayerRenderers();
+            direction =
+                -transform.forward;
         }
-
-        if (rb != null)
+        else
         {
-            rb.isKinematic =
-                false;
-
-            rb.useGravity =
-                true;
-
-            rb.linearDamping =
-                knockbackDrag;
-
-            rb.angularDamping =
-                knockbackDrag;
-
-            rb.collisionDetectionMode =
-                CollisionDetectionMode.ContinuousDynamic;
-
-            rb.AddForce(
-                force,
-                ForceMode.Impulse
-            );
-
-            rb.AddTorque(
-                new Vector3(
-                    -5f,
-                    Random.Range(
-                        -3f,
-                        3f
-                    ),
-                    4f
-                ),
-                ForceMode.Impulse
-            );
+            direction.Normalize();
         }
 
-        if (
-            GameManager.Instance != null
-        )
-        {
-            GameManager.Instance.GameOver();
-        }
-    }
-
-
-    //=========================================================
-    // OBSTACLE COLLISION
-    //=========================================================
-
-    private void ProcessObstacleCollision(
-        GameObject obj
-    )
-    {
-        if (isDead)
-            return;
-
-        if (
-            IsAmbulance(obj)
-        )
-        {
-            return;
-        }
-
-        if (
-            TryConsumeShield(obj)
-        )
-        {
-            return;
-        }
-
-        if (
-            rampCollisionProtectionTimer >
-            0f
-        )
-        {
-            /*
-             * Ramp protection chỉ nằm sau Shield.
-             * Shield vẫn hoạt động bình thường.
-             */
-            return;
-        }
-
-        if (
-            photonController != null &&
-            photonController.IsPhotonActive
-        )
-        {
-            return;
-        }
-
-        bool isExciter =
-            obj != null &&
-            obj.name
-                .ToLower()
-                .Contains("exciter");
-
-        if (
-            enableExplosionAnimation &&
-            explosionEffectPrefab != null
-        )
-        {
-            Vector3 spawnPos =
-                obj != null
-                    ?
-                    (
-                        transform.position +
-                        obj.transform.position
-                    ) * 0.5f
-                    :
-                    transform.position;
-
-            Instantiate(
-                explosionEffectPrefab,
-                spawnPos,
-                Quaternion.identity
-            );
-        }
-
-        float zForce =
-            isExciter
-                ?
-                exciterKnockbackZ
-                :
-                oncomingKnockbackZ;
-
-        float randomX =
-            Random.Range(
-                -2.5f,
-                2.5f
-            );
-
-        ApplyFatalKnockback(
-            new Vector3(
-                randomX,
-                upwardKnockbackY,
-                zForce
-            )
+        KillPlayerWithImpact(
+            force,
+            direction,
+            1f
         );
     }
+
+//=========================================================
+// OBSTACLE COLLISION - TRIGGER
+//=========================================================
+
+private void ProcessObstacleCollision(
+    GameObject obj
+)
+{
+    if (obj == null)
+        return;
+//=====================================================
+// PHOTON
+//=====================================================
+
+if (
+    photonController != null &&
+    photonController.IsPhotonActive
+)
+{
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "TRIGGER COLLISION IGNORED | " +
+            "Photon active."
+        );
+    }
+
+    return;
+}
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "PROCESS TRIGGER OBSTACLE | " +
+            "Object = " +
+            obj.name
+        );
+    }
+
+    //=====================================================
+    // AMBULANCE
+    //=====================================================
+
+    if (IsAmbulance(obj))
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "TRIGGER IGNORED | Ambulance."
+            );
+        }
+
+        return;
+    }
+
+    //=====================================================
+    // SHIELD
+    //=====================================================
+
+    if (TryConsumeShield(obj))
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "TRIGGER BLOCKED BY SHIELD."
+            );
+        }
+
+        return;
+    }
+
+    //=====================================================
+    // GET DIRECTION
+    //=====================================================
+
+    Vector3 direction =
+        GetFallbackKnockbackDirection(
+            obj
+        );
+
+    float impactStrength =
+        1f;
+
+    //=====================================================
+    // FINAL FORCE
+    //=====================================================
+
+    Vector3 finalForce =
+        direction *
+        knockbackForce;
+
+    finalForce +=
+        Vector3.up *
+        upwardKnockbackY;
+
+
+    //=====================================================
+    // EXPLOSION POSITION
+    //=====================================================
+
+    Vector3 explosionPosition =
+        transform.position;
+
+    Collider obstacleCollider =
+        obj.GetComponentInChildren<Collider>();
+
+    if (obstacleCollider != null)
+    {
+        explosionPosition =
+            obstacleCollider.ClosestPoint(
+                transform.position
+            );
+    }
+    else
+    {
+        explosionPosition =
+            obj.transform.position;
+    }
+
+
+    //=====================================================
+    // EXPLOSION
+    //=====================================================
+
+    SpawnImpactExplosion(
+        explosionPosition
+    );
+
+
+    //=====================================================
+    // DEBUG
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "TRIGGER KNOCKBACK | " +
+            "Direction = " +
+            direction +
+            " | Force = " +
+            finalForce +
+            " | ExplosionPosition = " +
+            explosionPosition
+        );
+    }
+
+
+    //=====================================================
+    // DEATH
+    //=====================================================
+
+    KillPlayerWithImpact(
+        finalForce,
+        direction,
+        impactStrength
+    );
+}
 
 
     //=========================================================
@@ -2936,200 +3540,591 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // TRIGGER ENTER
-    //=========================================================
+// TRIGGER ENTER
+//=========================================================
 
-    private void OnTriggerEnter(
-        Collider other
+private void OnTriggerEnter(
+    Collider other
+)
+{
+    if (isDead)
+        return;
+
+
+    GameObject obj =
+        other.gameObject;
+
+
+    //=====================================================
+    // BA GAC RAMP - TRIGGER HARD GUARD
+    //
+    // Khi đang leo ramp, mọi trigger thuộc đúng Ba Gác
+    // đang leo đều không được đi vào hệ thống obstacle.
+    // RampTrigger riêng vẫn được xử lý ở bên dưới.
+    //=====================================================
+
+    if (
+        rampState ==
+        RampState.Climbing &&
+        IsObjectFromActiveRampBaGac(
+            obj
+        )
     )
     {
-        if (isDead)
-            return;
-
-        GameObject obj =
-            other.gameObject;
-
-        if (IsGum(obj))
+        if (knockbackDebug)
         {
-            CollectGum(obj);
-
-            return;
+            Debug.Log(
+                "[PlayerController] " +
+                "HARD BLOCK BA GAC RAMP TRIGGER | " +
+                "Object = " +
+                obj.name
+            );
         }
 
-        if (IsPhoton(obj))
+        return;
+    }
+
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "ON TRIGGER ENTER | " +
+            "Object = " +
+            obj.name
+        );
+    }
+
+
+    //=====================================================
+    // GUM
+    //=====================================================
+
+    if (IsGum(obj))
+    {
+        CollectGum(obj);
+
+        return;
+    }
+
+
+    //=====================================================
+    // PHOTON
+    //=====================================================
+
+    if (IsPhoton(obj))
+    {
+        if (
+            photonController != null
+        )
         {
-            if (
-                photonController != null
+            photonController.ActivatePhoton();
+        }
+
+        Destroy(obj);
+
+        return;
+    }
+
+
+    //=====================================================
+    // SHIELD
+    //=====================================================
+
+    if (IsShield(obj))
+    {
+        return;
+    }
+
+
+    //=====================================================
+    // RAMP TRIGGER ONLY
+    //
+    // Chỉ RampTrigger mới được bắt đầu ramp.
+    // Không dùng IsRamp() chung ở đây nữa.
+    //=====================================================
+
+    if (
+        IsRampTrigger(obj)
+    )
+    {
+        BeginRamp(other);
+
+        return;
+    }
+
+
+    //=====================================================
+    // AMBULANCE
+    //=====================================================
+
+    if (
+        IsAmbulance(obj)
+    )
+    {
+        return;
+    }
+
+
+    //=====================================================
+    // OBSTACLE
+    //=====================================================
+
+    if (
+        IsObstacle(obj)
+    )
+    {
+        ProcessObstacleCollision(
+            obj
+        );
+    }
+    else if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "TRIGGER OBJECT IS NOT OBSTACLE | " +
+            obj.name
+        );
+    }
+}
+
+
+  //=========================================================
+// TRIGGER EXIT
+//=========================================================
+
+private void OnTriggerExit(
+    Collider other
+)
+{
+    if (
+        activeRampCollider == null
+    )
+    {
+        return;
+    }
+
+
+    if (
+        other != activeRampCollider
+    )
+    {
+        return;
+    }
+
+
+    //=====================================================
+    // CHỈ BỎ REFERENCE TRIGGER
+    //
+    // KHÔNG CancelRamp() ở đây.
+    //
+    // Player có thể đã rời volume RampTrigger
+    // nhưng vẫn đang ở trên ramp / chuẩn bị launch.
+    //=====================================================
+
+    activeRampCollider =
+        null;
+}
+
+
+//=========================================================
+// COLLISION ENTER
+//=========================================================
+
+private void OnCollisionEnter(
+    Collision collision
+)
+{
+    if (isDead)
+        return;
+
+    if (collision == null)
+        return;
+
+    GameObject obj =
+        collision.gameObject;
+
+
+    //=====================================================
+    // BA GAC RAMP - HARD COLLISION GUARD
+    //
+    // Ignore chính xác cặp collider đang va chạm.
+    // Không phụ thuộc vào việc IgnoreCollision() ở BeginRamp
+    // đã chạy trước physics step hay chưa.
+    //=====================================================
+
+    if (
+        rampState ==
+        RampState.Climbing &&
+        IsObjectFromActiveRampBaGac(
+            obj
+        )
+    )
+    {
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "HARD BLOCK BA GAC RAMP COLLISION | " +
+                "Object = " +
+                obj.name +
+                " | Collider = " +
+                collision.collider.name
+            );
+        }
+
+        return;
+    }
+
+
+    //=====================================================
+    // DEBUG ENTRY
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        ContactPoint firstContact =
+            collision.contactCount > 0
+                ? collision.GetContact(0)
+                : default;
+
+        Debug.Log(
+            "[PlayerController] " +
+            "ON COLLISION ENTER | " +
+            "Object = " +
+            obj.name +
+            " | Collider = " +
+            collision.collider.name +
+            " | Contacts = " +
+            collision.contactCount +
+            " | RelativeVelocity = " +
+            collision.relativeVelocity +
+            " | ContactNormal = " +
+            (
+                collision.contactCount > 0
+                    ? firstContact.normal.ToString()
+                    : "NONE"
             )
+        );
+    }
+
+
+    //=====================================================
+    // RAMP CLIMB PROTECTION
+    //
+    // Khi Player đang leo ramp:
+    //
+    // - Không xử lý obstacle thuộc Ba Gác hiện tại
+    // - Không knockback
+    // - Không kill Player
+    //
+    // Collision vat ly voi Ba Gac da duoc IgnoreCollision
+    // ngay khi BeginRamp() thanh cong.
+    // RampSurface van duoc raycast de lay do cao + normal.
+    //=====================================================
+
+    if (
+        rampState ==
+        RampState.Climbing
+    )
+    {
+        if (
+            IsObjectFromActiveRampBaGac(
+                obj
+            )
+        )
+        {
+            if (knockbackDebug)
             {
-                photonController.ActivatePhoton();
+                Debug.Log(
+                    "[PlayerController] " +
+                    "RAMP CLIMB COLLISION IGNORED | " +
+                    "Object = " +
+                    obj.name
+                );
             }
 
-            Destroy(obj);
-
             return;
-        }
-
-        if (IsShield(obj))
-        {
-            return;
-        }
-
-
-        //=====================================================
-        // RAMP FIRST
-        //=====================================================
-
-        if (IsRamp(obj))
-        {
-            BeginRamp(other);
-
-            return;
-        }
-
-        if (
-            IsAmbulance(obj)
-        )
-        {
-            return;
-        }
-
-        if (IsObstacle(obj))
-        {
-            ProcessObstacleCollision(
-                obj
-            );
         }
     }
 
 
-    //=========================================================
-    // TRIGGER EXIT
-    //=========================================================
+    //=====================================================
+    // GUM
+    //=====================================================
 
-    private void OnTriggerExit(
-        Collider other
-    )
+    if (IsGum(obj))
+    {
+        CollectGum(obj);
+
+        return;
+    }
+
+
+    //=====================================================
+    // PHOTON
+    //=====================================================
+
+    if (IsPhoton(obj))
     {
         if (
-            activeRampCollider == null
+            photonController != null
         )
         {
-            return;
+            photonController.ActivatePhoton();
         }
 
-        if (
-            other != activeRampCollider
-        )
-        {
-            return;
-        }
+        Destroy(obj);
 
-        /*
-         * Không hủy ramp state ở đây.
-         * Player có thể đã rời trigger nhưng vẫn
-         * đang trên ramp / launch.
-         */
-
-        activeRampCollider =
-            null;
+        return;
     }
 
 
-    //=========================================================
-    // COLLISION ENTER
-    //=========================================================
+    //=====================================================
+    // SHIELD
+    //=====================================================
 
-    private void OnCollisionEnter(
-        Collision collision
+    if (IsShield(obj))
+    {
+        return;
+    }
+
+
+    //=====================================================
+    // RAMP SURFACE
+    //
+    // KHÔNG BeginRamp ở đây.
+    // Ramp chỉ bắt đầu từ RampTrigger.
+    //=====================================================
+
+
+    //=====================================================
+    // AMBULANCE
+    //=====================================================
+
+    if (
+        IsAmbulance(obj)
     )
     {
-        if (isDead)
-            return;
-
-        GameObject obj =
-            collision.gameObject;
-
-        if (IsGum(obj))
+        if (knockbackDebug)
         {
-            CollectGum(obj);
-
-            return;
-        }
-
-        if (IsPhoton(obj))
-        {
-            if (
-                photonController != null
-            )
-            {
-                photonController.ActivatePhoton();
-            }
-
-            Destroy(obj);
-
-            return;
-        }
-
-        if (IsShield(obj))
-        {
-            return;
-        }
-
-        /*
-         * Ramp collider non-trigger.
-         */
-
-        if (IsRamp(obj))
-        {
-            BeginRamp(
-                collision.collider
-            );
-
-            return;
-        }
-
-        if (
-            IsAmbulance(obj)
-        )
-        {
-            return;
-        }
-
-        if (IsObstacle(obj))
-        {
-            ProcessObstacleCollision(
-                obj
+            Debug.Log(
+                "[PlayerController] " +
+                "COLLISION IDENTIFIED AS AMBULANCE | " +
+                obj.name
             );
         }
+
+        return;
     }
 
+
+    //=====================================================
+    // OBSTACLE
+    //=====================================================
+
+    bool obstacle =
+        IsObstacle(obj);
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "IS OBSTACLE RESULT = " +
+            obstacle +
+            " | Object = " +
+            obj.name
+        );
+    }
+
+    if (obstacle)
+    {
+        ProcessObstacleCollision(
+            obj,
+            collision
+        );
+    }
+    else if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "COLLISION REJECTED AS OBSTACLE | " +
+            "Object = " +
+            obj.name
+        );
+    }
+}
+private void ProcessObstacleCollision(
+    GameObject obj,
+    Collision collision
+)
+{
+    if (obj == null)
+    {
+        if (knockbackDebug)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "PROCESS PHYSICAL FAILED | obj == NULL"
+            );
+        }
+
+        return;
+    }
+
+    if (collision == null)
+    {
+        if (knockbackDebug)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "PROCESS PHYSICAL FAILED | collision == NULL"
+            );
+        }
+
+        return;
+    }
+
+
+    //=====================================================
+    // BA GAC RAMP - FINAL PHYSICAL GUARD
+    //=====================================================
+
+    if (
+        rampState ==
+        RampState.Climbing &&
+        IsObjectFromActiveRampBaGac(
+            obj
+        )
+    )
+    {
+       
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "PHYSICAL BA GAC RAMP COLLISION REJECTED | " +
+                "Object = " +
+                obj.name
+            );
+        }
+
+        return;
+    }
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "PROCESS PHYSICAL OBSTACLE | " +
+            "Object = " +
+            obj.name +
+            " | Contacts = " +
+            collision.contactCount +
+            " | RelativeVelocity = " +
+            collision.relativeVelocity
+        );
+    }
+
+    //=====================================================
+    // AMBULANCE
+    //=====================================================
+
+    if (IsAmbulance(obj))
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "PHYSICAL COLLISION IGNORED | Ambulance."
+            );
+        }
+
+        return;
+    }
+
+    //=====================================================
+    // SHIELD
+    //=====================================================
+
+    if (TryConsumeShield(obj))
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "PHYSICAL COLLISION BLOCKED BY SHIELD."
+            );
+        }
+
+        return;
+    }
+
+    //=====================================================
+    // PHOTON
+    //=====================================================
+
+    if (
+        photonController != null &&
+        photonController.IsPhotonActive
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "PHYSICAL COLLISION IGNORED | Photon active."
+            );
+        }
+
+        return;
+    }
+
+    //=====================================================
+    // APPLY KNOCKBACK
+    //=====================================================
+
+    ApplyCollisionKnockback(
+        collision,
+        1f
+    );
+}
 
     //=========================================================
     // COLLECT GUM
     //=========================================================
 
-    private void CollectGum(
-        GameObject obj
-    )
+   private void CollectGum(GameObject obj)
+{
+    if (obj == null)
+        return;
+
+    Gum gum =
+        obj.GetComponentInParent<Gum>();
+
+    if (gum != null)
     {
-        if (obj == null)
-            return;
-
-        ActivateGumBoost();
-
-        Gum gum =
-            obj.GetComponentInParent<Gum>();
-
-        if (gum != null)
-        {
-            gum.Collect();
-        }
-        else
-        {
-            Destroy(obj);
-        }
+        gum.Collect();
+        return;
     }
+
+    if (ItemManager.Instance != null)
+    {
+        ItemManager.Instance.ActivateGum();
+    }
+    else
+    {
+        Debug.LogWarning(
+            "[PlayerController] " +
+            "Cannot activate Gum | " +
+            "ItemManager.Instance == NULL."
+        );
+    }
+
+    Destroy(obj);
+}
 
 
     //=========================================================
@@ -3232,10 +4227,6 @@ public class PlayerController : MonoBehaviour
         if (obj == null)
             return false;
 
-        /*
-         * Ưu tiên chính xác theo hierarchy.
-         */
-
         if (
             obj.CompareTag("Ramp")
         )
@@ -3283,6 +4274,53 @@ public class PlayerController : MonoBehaviour
             name == "ton";
     }
 
+    //=========================================================
+// CHECK RAMP TRIGGER
+//=========================================================
+
+private bool IsRampTrigger(
+    GameObject obj
+)
+{
+    if (obj == null)
+        return false;
+
+
+    string name =
+        obj.name.ToLower();
+
+
+    //=====================================================
+    // TAG
+    //=====================================================
+
+    if (
+        obj.CompareTag("Ramp")
+    )
+    {
+        if (
+            name.Contains("trigger")
+        )
+        {
+            return true;
+        }
+    }
+
+
+    //=====================================================
+    // NAME
+    //=====================================================
+
+    return
+        name == "ramptrigger" ||
+        name == "ramp_trigger" ||
+        name == "tinramptrigger" ||
+        name == "tin_ramp_trigger" ||
+        name == "bagacramptrigger" ||
+        name == "bagac_ramp_trigger" ||
+        name.Contains("ramptrigger") ||
+        name.Contains("ramp_trigger");
+}
 
     //=========================================================
     // CHECK OBJECT FROM ACTIVE BA GAC
@@ -3312,87 +4350,202 @@ public class PlayerController : MonoBehaviour
 
 
     //=========================================================
-    // CHECK OBSTACLE
+    // PHOTON - BLOCK ACTIVE BA GAC RAMP HIT
+    //
+    // PhotonController can receive the same collider callback
+    // independently from PlayerController. This public query
+    // lets PhotonController respect the ramp system without
+    // duplicating the ramp hierarchy logic.
     //=========================================================
 
-    private bool IsObstacle(
+    public bool IsRampTraversalActive()
+    {
+        return
+            rampState != RampState.None &&
+            activeRampRoot != null;
+    }
+
+
+    public bool IsPhotonRampCollisionBlocked(
+        Collider hitCollider
+    )
+    {
+        if (hitCollider == null)
+        {
+            return false;
+        }
+
+        //=====================================================
+        // RAMP COLLIDER PROTECTION - NGAY TU CALLBACK DAU TIEN
+        //=====================================================
+        // Khi Photon nhan collider ramp truoc khi PlayerController
+        // kip chuyen state sang Climbing, van phai bo qua collider
+        // nay. Neu khong, Photon co the coi ramp la Ba Gac va goi
+        // HitBaGacObject() ngay tai frame dau tien.
+        if (IsRamp(hitCollider.gameObject))
+        {
+            return true;
+        }
+
+        //=====================================================
+        // TOAN BO BA GAC TRONG SUOT LUOT RAMP
+        //=====================================================
+        // Khi da vao ramp, khong dung root comparison nua. Một so
+        // hierarchy co the dat ramp/body thanh cac root khac nhau.
+        // Dieu kien bao ve phai dua tren ramp state + active ramp.
+        //
+        // Tu Climbing den Airborne, Photon bo qua Ba Gac. Khi landing,
+        // rampState tro ve None va activeRampRoot bi clear -> Photon
+        // lai co the huc than Ba Gac trong lan tiep theo.
+        if (
+            rampState != RampState.None &&
+            activeRampRoot != null &&
+            IsBaGacLikeObject(hitCollider.gameObject)
+        )
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+
+    //=========================================================
+    // CHECK BA GAC / RAMP FOR PHOTON
+    //=========================================================
+    private bool IsBaGacLikeObject(
         GameObject obj
     )
     {
         if (obj == null)
-            return false;
-
-        if (
-            IsAmbulance(obj)
-        )
         {
             return false;
         }
 
-        if (IsRamp(obj))
+        Transform current =
+            obj.transform;
+
+        while (current != null)
         {
-            return false;
+            string name =
+                current.name.ToLowerInvariant();
+
+            if (
+                name.Contains("bagac") ||
+                name.Contains("ba gac") ||
+                name.Contains("ba_gac")
+            )
+            {
+                return true;
+            }
+
+            current =
+                current.parent;
         }
 
-        /*
-         * Khi đang chạy trên ramp:
-         * không nhận Ba Gác owner làm obstacle.
-         */
-
-        if (
-            rampState ==
-            RampState.Climbing &&
-            IsObjectFromActiveRampBaGac(obj)
-        )
-        {
-            return false;
-        }
-
-        TrafficCarBehavior traffic =
-            obj.GetComponentInParent<
-                TrafficCarBehavior
-            >();
-
-        if (traffic != null)
-            return true;
-
-        TrafficVehicle vehicle =
-            obj.GetComponentInParent<
-                TrafficVehicle
-            >();
-
-        if (vehicle != null)
-            return true;
-
-        if (
-            obj.CompareTag("Obstacle")
-        )
-        {
-            return true;
-        }
-
-        Transform root =
-            obj.transform.root;
-
-        if (
-            root != null &&
-            root.CompareTag("Obstacle")
-        )
-        {
-            return true;
-        }
-
-        string name =
-            obj.name.ToLower();
-
-        return
-            name.Contains("car") ||
-            name.Contains("bus") ||
-            name.Contains("motor") ||
-            name.Contains("bike") ||
-            name.Contains("bagac") ||
-            name.Contains("exciter");
+        return false;
     }
+
+
+    //=========================================================
+    // CHECK OBSTACLE
+    //=========================================================
+private bool IsObstacle(
+    GameObject obj
+)
+{
+    if (obj == null)
+        return false;
+
+
+    if (
+        IsAmbulance(obj)
+    )
+    {
+        return false;
+    }
+
+
+    //=====================================================
+    // RAMP KHÔNG PHẢI OBSTACLE
+    //=====================================================
+
+    if (IsRamp(obj))
+    {
+        return false;
+    }
+
+
+    //=====================================================
+    // TRAFFIC CAR BEHAVIOR
+    //=====================================================
+
+    TrafficCarBehavior traffic =
+        obj.GetComponentInParent<
+            TrafficCarBehavior
+        >();
+
+    if (traffic != null)
+    {
+        return true;
+    }
+
+
+    //=====================================================
+    // TRAFFIC VEHICLE
+    //=====================================================
+
+    TrafficVehicle vehicle =
+        obj.GetComponentInParent<
+            TrafficVehicle
+        >();
+
+    if (vehicle != null)
+    {
+        return true;
+    }
+
+
+    //=====================================================
+    // OBSTACLE TAG
+    //=====================================================
+
+    if (
+        obj.CompareTag("Obstacle")
+    )
+    {
+        return true;
+    }
+
+
+    Transform root =
+        obj.transform.root;
+
+    if (
+        root != null &&
+        root.CompareTag("Obstacle")
+    )
+    {
+        return true;
+    }
+
+
+    //=====================================================
+    // NAME FALLBACK
+    //=====================================================
+
+    string name =
+        obj.name.ToLower();
+
+
+    return
+        name.Contains("car") ||
+        name.Contains("bus") ||
+        name.Contains("motor") ||
+        name.Contains("bike") ||
+        name.Contains("bagac") ||
+        name.Contains("exciter");
+}
 
 
     //=========================================================
@@ -3614,4 +4767,1242 @@ public class PlayerController : MonoBehaviour
         ExplosionEffectPrefabStatic =
             explosionEffectPrefab;
     }
+
+
+    //=========================================================
+    // FIND PLAYER BOX COLLIDER
+    //=========================================================
+
+    private void FindPlayerBoxCollider()
+    {
+        playerBoxCollider =
+            GetComponent<BoxCollider>();
+
+        if (playerBoxCollider != null)
+        {
+            if (knockbackDebug)
+            {
+                Debug.Log(
+                    "[PlayerController] " +
+                    "BOX COLLIDER FOUND ON PLAYER | " +
+                    playerBoxCollider.name
+                );
+            }
+
+            return;
+        }
+
+        if (!findPlayerBoxColliderInChildren)
+        {
+            if (knockbackDebug)
+            {
+                Debug.LogWarning(
+                    "[PlayerController] " +
+                    "BOX COLLIDER NOT FOUND ON ROOT " +
+                    "AND CHILD SEARCH DISABLED."
+                );
+            }
+
+            return;
+        }
+
+        playerBoxCollider =
+            GetComponentInChildren<BoxCollider>(
+                true
+            );
+
+        if (playerBoxCollider == null)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "Không tìm thấy BoxCollider cho Player."
+            );
+        }
+        else if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "BOX COLLIDER FOUND IN CHILD | " +
+                playerBoxCollider.name +
+                " | Transform = " +
+                playerBoxCollider.transform.name
+            );
+        }
+    }
+
+
+//=========================================================
+// GET IMPACT DIRECTION FROM PLAYER BOX COLLIDER
+//=========================================================
+
+private Vector3 GetImpactDirectionFromBoxCollider(
+    Collision collision
+)
+{
+    //=====================================================
+    // FIND PLAYER BOX COLLIDER
+    //=====================================================
+
+    if (playerBoxCollider == null)
+    {
+        FindPlayerBoxCollider();
+    }
+
+
+    //=====================================================
+    // BASIC FALLBACK
+    //=====================================================
+
+    if (
+        collision == null ||
+        collision.contactCount <= 0
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "KNOCKBACK DIRECTION FALLBACK | " +
+                "No valid collision contact."
+            );
+        }
+
+        return -transform.forward;
+    }
+
+
+    //=====================================================
+    // BOX COLLIDER NOT FOUND
+    //=====================================================
+
+    if (playerBoxCollider == null)
+    {
+        Vector3 fallback =
+            GetFallbackKnockbackDirection(
+                collision.gameObject
+            );
+
+        if (knockbackDebug)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "KNOCKBACK DIRECTION FALLBACK | " +
+                "Player BoxCollider not found."
+            );
+        }
+
+        return fallback;
+    }
+
+
+    //=====================================================
+    // GET REAL BOX CENTER IN WORLD SPACE
+    //
+    // playerBoxCollider.center là LOCAL SPACE của
+    // chính BoxCollider.
+    //
+    // Vì BoxCollider có thể nằm trong CHILD nên phải
+    // chuyển đúng center của nó sang world space.
+    //=====================================================
+
+    Vector3 boxWorldCenter =
+        playerBoxCollider.transform.TransformPoint(
+            playerBoxCollider.center
+        );
+
+
+    //=====================================================
+    // CONVERT BOX CENTER TO PLAYER ROOT LOCAL SPACE
+    //
+    // Từ đây direction sẽ dựa theo hướng của Player,
+    // không phụ thuộc rotation riêng của child collider.
+    //=====================================================
+
+    Vector3 localBoxCenter =
+        transform.InverseTransformPoint(
+            boxWorldCenter
+        );
+
+
+    //=====================================================
+    // ACCUMULATE IMPACT POSITION
+    //
+    // Có thể có nhiều ContactPoint.
+    // Lấy trung bình để tránh contact đầu tiên
+    // quyết định sai hướng.
+    //=====================================================
+
+    Vector3 averageLocalContact =
+        Vector3.zero;
+
+    int validContacts =
+        0;
+
+    for (
+        int i = 0;
+        i < collision.contactCount;
+        i++
+    )
+    {
+        ContactPoint contact =
+            collision.GetContact(i);
+
+        Vector3 localContact =
+            transform.InverseTransformPoint(
+                contact.point
+            );
+
+        averageLocalContact +=
+            localContact;
+
+        validContacts++;
+    }
+
+
+    //=====================================================
+    // SAFETY
+    //=====================================================
+
+    if (validContacts <= 0)
+    {
+        return GetFallbackKnockbackDirection(
+            collision.gameObject
+        );
+    }
+
+    averageLocalContact /=
+        validContacts;
+
+
+    //=====================================================
+    // IMPACT OFFSET
+    //
+    // Đây là vị trí va chạm so với tâm BoxCollider.
+    //
+    // +X = bên phải Player
+    // -X = bên trái Player
+    //
+    // +Z = phía trước Player
+    // -Z = phía sau Player
+    //=====================================================
+
+    Vector3 localImpact =
+        averageLocalContact -
+        localBoxCenter;
+
+    localImpact.y =
+        0f;
+
+
+    //=====================================================
+    // DEBUG RAW IMPACT
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "BOX IMPACT RAW\n" +
+            "Object = " +
+            collision.gameObject.name +
+            "\n" +
+            "BoxCenterWorld = " +
+            boxWorldCenter +
+            "\n" +
+            "BoxCenterLocal = " +
+            localBoxCenter +
+            "\n" +
+            "ContactLocal = " +
+            averageLocalContact +
+            "\n" +
+            "ImpactLocal = " +
+            localImpact
+        );
+    }
+
+
+    //=====================================================
+    // IF IMPACT IS TOO CLOSE TO CENTER
+    //
+    // Khi va đúng gần tâm BoxCollider thì vị trí không
+    // cho ta hướng rõ ràng.
+    //
+    // Lúc này dùng vị trí của obstacle so với Player.
+    //=====================================================
+
+    if (
+        localImpact.sqrMagnitude <
+        0.01f
+    )
+    {
+        Vector3 localObstacle =
+            transform.InverseTransformPoint(
+                collision.transform.position
+            );
+
+        localObstacle.y =
+            0f;
+
+        if (
+            localObstacle.sqrMagnitude >
+            0.001f
+        )
+        {
+            // Obstacle nằm ở đâu
+            // thì Player bị đánh từ phía đó.
+            localImpact =
+                localObstacle.normalized;
+        }
+        else
+        {
+            localImpact =
+                Vector3.forward;
+        }
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "IMPACT CENTER FALLBACK | " +
+                "LocalImpact = " +
+                localImpact
+            );
+        }
+    }
+    else
+    {
+        localImpact.Normalize();
+    }
+
+
+    //=====================================================
+    // KNOCKBACK DIRECTION
+    //
+    // Va phía trước:
+    // localImpact = +Z
+    // knockback = -Z
+    //
+    // Va phía sau:
+    // localImpact = -Z
+    // knockback = +Z
+    //
+    // Va trái:
+    // localImpact = -X
+    // knockback = +X
+    //
+    // Va phải:
+    // localImpact = +X
+    // knockback = -X
+    //
+    // Va chéo:
+    // giữ nguyên hướng chéo.
+    //=====================================================
+
+    Vector3 localKnockback =
+        -localImpact;
+
+    localKnockback.y =
+        0f;
+
+
+    if (
+        localKnockback.sqrMagnitude <
+        0.001f
+    )
+    {
+        localKnockback =
+            Vector3.back;
+    }
+
+    localKnockback.Normalize();
+
+
+    //=====================================================
+    // CONVERT TO WORLD SPACE
+    //
+    // Dùng Player ROOT transform.
+    //
+    // KHÔNG dùng:
+    // playerBoxCollider.transform.TransformDirection()
+    //
+    // vì BoxCollider có thể nằm ở child và có rotation
+    // riêng.
+    //=====================================================
+
+    Vector3 worldKnockback =
+        transform.TransformDirection(
+            localKnockback
+        );
+
+    worldKnockback.y =
+        0f;
+
+
+    if (
+        worldKnockback.sqrMagnitude <
+        0.001f
+    )
+    {
+        worldKnockback =
+            -transform.forward;
+    }
+
+    worldKnockback.Normalize();
+
+
+    //=====================================================
+    // DEBUG FINAL
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "FINAL KNOCKBACK DIRECTION\n" +
+            "Object = " +
+            collision.gameObject.name +
+            "\n" +
+            "LocalKnockback = " +
+            localKnockback +
+            "\n" +
+            "WorldKnockback = " +
+            worldKnockback
+        );
+    }
+
+
+    //=====================================================
+    // DEBUG RAYS
+    //=====================================================
+
+    if (knockbackDrawDebugRay)
+    {
+        Debug.DrawRay(
+            boxWorldCenter,
+            worldKnockback *
+            knockbackDebugRayLength,
+            Color.red,
+            3f
+        );
+
+        Debug.DrawRay(
+            boxWorldCenter,
+            -worldKnockback *
+            knockbackDebugRayLength,
+            Color.blue,
+            3f
+        );
+    }
+
+
+    return worldKnockback;
+}
+    //=========================================================
+    // GET IMPACT STRENGTH
+    //=========================================================
+
+    private float GetImpactStrength(
+        Collision collision
+    )
+    {
+        if (collision == null)
+            return 1f;
+
+        float relativeSpeed =
+            collision.relativeVelocity.magnitude;
+
+        float strength =
+            Mathf.InverseLerp(
+                2f,
+                25f,
+                relativeSpeed
+            );
+
+        float result =
+            Mathf.Lerp(
+                lightImpactMultiplier,
+                strongImpactMultiplier,
+                strength
+            );
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "IMPACT STRENGTH | " +
+                "RelativeSpeed = " +
+                relativeSpeed.ToString("F2") +
+                " | Normalized = " +
+                strength.ToString("F2") +
+                " | Multiplier = " +
+                result.ToString("F2")
+            );
+        }
+
+        return result;
+    }
+
+
+   //=========================================================
+    // APPLY IMPACT ROTATION
+    //=========================================================
+private void ApplyImpactRotation(
+    Vector3 knockbackDirection,
+    float impactStrength
+)
+{
+    if (rb == null)
+        return;
+
+
+    //=====================================================
+    // CONVERT KNOCKBACK TO PLAYER LOCAL SPACE
+    //=====================================================
+
+    Vector3 localDirection =
+        transform.InverseTransformDirection(
+            knockbackDirection
+        );
+
+    localDirection.y = 0f;
+
+    if (
+        localDirection.sqrMagnitude <
+        0.001f
+    )
+    {
+        localDirection =
+            Vector3.back;
+    }
+
+    localDirection.Normalize();
+
+
+    //=====================================================
+    // DIRECTION COMPONENTS
+    //=====================================================
+
+    float lateral =
+        localDirection.x;
+
+    float longitudinal =
+        localDirection.z;
+
+
+    //=====================================================
+    // ROTATION SETTINGS
+    //
+    // Roll = xe ngã trái / phải
+    // Pitch = xe chúi / ngửa nhẹ
+    // Yaw = xoay đầu xe
+    //=====================================================
+
+    float rollTorque =
+        -lateral *
+        knockbackRollTorque *
+        impactStrength;
+
+    float pitchTorque =
+        longitudinal *
+        knockbackRollTorque *
+        0.20f *
+        impactStrength;
+
+    float yawTorque =
+        lateral *
+        knockbackYawTorque *
+        0.25f *
+        impactStrength;
+
+
+    //=====================================================
+    // BUILD TORQUE
+    //=====================================================
+
+    Vector3 torque =
+        transform.forward *
+        rollTorque;
+
+    torque +=
+        transform.right *
+        pitchTorque;
+
+    torque +=
+        transform.up *
+        yawTorque;
+
+
+    //=====================================================
+    // LIMIT TORQUE
+    //
+    // Tránh va chạm chéo làm xe xoay quá mạnh.
+    //=====================================================
+
+    float maxTorque =
+        6f *
+        impactStrength;
+
+    if (
+        torque.magnitude >
+        maxTorque
+    )
+    {
+        torque =
+            torque.normalized *
+            maxTorque;
+    }
+
+
+    //=====================================================
+    // DEBUG
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "IMPACT ROTATION\n" +
+            "LocalDirection = " +
+            localDirection +
+            "\n" +
+            "Lateral = " +
+            lateral.ToString("F2") +
+            "\n" +
+            "Longitudinal = " +
+            longitudinal.ToString("F2") +
+            "\n" +
+            "RollTorque = " +
+            rollTorque.ToString("F2") +
+            "\n" +
+            "PitchTorque = " +
+            pitchTorque.ToString("F2") +
+            "\n" +
+            "YawTorque = " +
+            yawTorque.ToString("F2") +
+            "\n" +
+            "FinalTorque = " +
+            torque
+        );
+    }
+
+
+    //=====================================================
+    // APPLY PHYSICS TORQUE
+    //=====================================================
+
+    rb.AddTorque(
+        torque,
+        ForceMode.Impulse
+    );
+
+
+    //=====================================================
+    // CONTROLLED INITIAL ROTATION
+    //
+    // Không cộng torque * 0.35 nữa.
+    // Chỉ cho xe bắt đầu nghiêng một chút.
+    //=====================================================
+
+    Vector3 currentAngularVelocity =
+        rb.angularVelocity;
+
+    Vector3 controlledAngularVelocity =
+        torque *
+        0.035f;
+
+    currentAngularVelocity +=
+        controlledAngularVelocity;
+
+
+    //=====================================================
+    // LIMIT ANGULAR VELOCITY
+    //=====================================================
+
+    float maxAngularVelocity =
+        4.5f;
+
+    if (
+        currentAngularVelocity.magnitude >
+        maxAngularVelocity
+    )
+    {
+        currentAngularVelocity =
+            currentAngularVelocity.normalized *
+            maxAngularVelocity;
+    }
+
+    rb.angularVelocity =
+        currentAngularVelocity;
+
+
+    //=====================================================
+    // DEBUG FINAL ANGULAR VELOCITY
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "ANGULAR VELOCITY AFTER IMPACT = " +
+            rb.angularVelocity
+        );
+    }
+}
+
+
+
+
+    //=========================================================
+    // APPLY COLLISION KNOCKBACK
+    //=========================================================
+
+public void ApplyCollisionKnockback(
+    Collision collision,
+    float forceMultiplier = 1f
+)
+{
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "APPLY COLLISION KNOCKBACK ENTER | " +
+            "Collision = " +
+            (
+                collision != null
+                    ? collision.gameObject.name
+                    : "NULL"
+            ) +
+            " | Multiplier = " +
+            forceMultiplier
+        );
+    }
+
+    if (isDead)
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "KNOCKBACK STOP | Player already dead."
+            );
+        }
+
+        return;
+    }
+
+    if (
+        rampCollisionProtectionTimer >
+        0f
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "KNOCKBACK STOP | Ramp protection = " +
+                rampCollisionProtectionTimer.ToString("F3")
+            );
+        }
+
+        return;
+    }
+
+    if (
+    photonController != null &&
+    photonController.IsPhotonActive
+)
+{
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "PHOTON ACTIVE | " +
+            "Skip local knockback + death."
+        );
+    }
+
+    return;
+}
+    if (collision == null)
+    {
+        if (knockbackDebug)
+        {
+            Debug.LogWarning(
+                "[PlayerController] " +
+                "KNOCKBACK STOP | Collision NULL."
+            );
+        }
+
+        return;
+    }
+
+
+    //=====================================================
+    // OBSTACLE
+    //=====================================================
+
+    GameObject obstacle =
+        collision.gameObject;
+
+
+    //=====================================================
+    // SHIELD
+    //=====================================================
+
+    if (
+        TryConsumeShield(obstacle)
+    )
+    {
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "KNOCKBACK STOP | Shield consumed collision."
+            );
+        }
+
+        return;
+    }
+
+
+    //=====================================================
+    // GET DIRECTION
+    //=====================================================
+
+    Vector3 direction =
+        GetImpactDirectionFromBoxCollider(
+            collision
+        );
+
+
+    //=====================================================
+    // IMPACT STRENGTH
+    //=====================================================
+
+    float impactStrength =
+        GetImpactStrength(
+            collision
+        );
+
+    impactStrength *=
+        Mathf.Max(
+            0f,
+            forceMultiplier
+        );
+
+
+    //=====================================================
+    // FINAL FORCE
+    //=====================================================
+
+    Vector3 force =
+        direction *
+        knockbackForce *
+        impactStrength;
+
+    force +=
+        Vector3.up *
+        upwardKnockbackY;
+
+
+    //=====================================================
+    // EXPLOSION POSITION
+    //=====================================================
+
+    Vector3 explosionPosition =
+        transform.position;
+
+    if (
+        collision.contactCount >
+        0
+    )
+    {
+        explosionPosition =
+            collision.GetContact(0).point;
+    }
+
+
+    //=====================================================
+    // EXPLOSION
+    //=====================================================
+
+    SpawnImpactExplosion(
+        explosionPosition
+    );
+
+
+    //=====================================================
+    // FINAL DEBUG
+    //=====================================================
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "IMPACT FINAL | " +
+            "Direction = " +
+            direction +
+            " | Strength = " +
+            impactStrength.ToString("F2") +
+            " | HorizontalForce = " +
+            (
+                direction *
+                knockbackForce *
+                impactStrength
+            ) +
+            " | FinalForce = " +
+            force +
+            " | ExplosionPosition = " +
+            explosionPosition
+        );
+    }
+
+
+    //=====================================================
+    // DEATH
+    //=====================================================
+
+    KillPlayerWithImpact(
+        force,
+        direction,
+        impactStrength
+    );
+}
+
+
+    //=========================================================
+    // KILL PLAYER WITH IMPACT
+    //=========================================================
+
+    private void KillPlayerWithImpact(
+        Vector3 force,
+        Vector3 knockbackDirection,
+        float impactStrength
+    )
+    {
+        if (isDead)
+            return;
+
+        if (
+            isShieldBlockingHit
+        )
+        {
+            return;
+        }
+
+        if (
+            shieldHitCooldownTimer >
+            0f
+        )
+        {
+            return;
+        }
+
+        isDead =
+            true;
+
+        StopEngineAudio();
+
+        rampState =
+            RampState.None;
+
+        activeRampCollider =
+            null;
+
+        activeRampSurfaceCollider =
+            null;
+
+        activeRampRoot =
+            null;
+
+        rampCollisionProtectionTimer =
+            0f;
+
+
+        //=====================================================
+        // RESTORE RENDERERS
+        //=====================================================
+
+        if (
+            shieldFlashCoroutine != null
+        )
+        {
+            StopCoroutine(
+                shieldFlashCoroutine
+            );
+
+            shieldFlashCoroutine =
+                null;
+
+            RestorePlayerRenderers();
+        }
+
+
+        //=====================================================
+        // RIGIDBODY
+        //=====================================================
+
+        if (rb != null)
+        {
+            rb.isKinematic =
+                false;
+
+            rb.useGravity =
+                true;
+
+            // Cho phép Rigidbody tự do xoay khi Player chết
+            rb.constraints &= ~RigidbodyConstraints.FreezeRotationX;
+            rb.constraints &= ~RigidbodyConstraints.FreezeRotationY;
+            rb.constraints &= ~RigidbodyConstraints.FreezeRotationZ;
+
+            rb.linearDamping =
+                knockbackDrag;
+
+            rb.angularDamping =
+                knockbackAngularDrag;
+
+            rb.collisionDetectionMode =
+                CollisionDetectionMode.ContinuousDynamic;
+
+
+            //=================================================
+            // RESET VELOCITY
+            //=================================================
+
+            rb.linearVelocity =
+                Vector3.zero;
+
+            rb.angularVelocity =
+                Vector3.zero;
+
+
+            //=================================================
+            // KNOCKBACK
+            //=================================================
+
+            rb.AddForce(
+                force,
+                ForceMode.Impulse
+            );
+
+
+            //=================================================
+            // ROTATION
+            //=================================================
+
+            ApplyImpactRotation(
+                knockbackDirection,
+                impactStrength
+            );
+        }
+
+
+        //=====================================================
+        // DEBUG DEATH
+        //=====================================================
+
+        if (knockbackDebug)
+        {
+            Debug.Log(
+                "[PlayerController] " +
+                "PLAYER KILLED BY IMPACT | " +
+                "Force = " +
+                force +
+                " | Direction = " +
+                knockbackDirection +
+                " | ImpactStrength = " +
+                impactStrength.ToString("F2") +
+                " | Rigidbody = " +
+                (rb != null ? "FOUND" : "NULL")
+            );
+        }
+
+        
+        //=====================================================
+        // GAME OVER
+        //=====================================================
+
+        if (
+    impactGameOverCoroutine != null
+)
+{
+    StopCoroutine(
+        impactGameOverCoroutine
+    );
+}
+
+impactGameOverCoroutine =
+    StartCoroutine(
+        DelayedImpactGameOver()
+    );
+    }
+
+
+    //=========================================================
+    // FALLBACK DIRECTION
+    //=========================================================
+
+    private Vector3 GetFallbackKnockbackDirection(
+        GameObject obstacle
+    )
+    {
+        if (obstacle == null)
+        {
+            return -transform.forward;
+        }
+
+        Vector3 direction =
+            transform.position -
+            obstacle.transform.position;
+
+        direction.y =
+            0f;
+
+        if (
+            direction.sqrMagnitude <
+            0.001f
+        )
+        {
+            direction =
+                -transform.forward;
+        }
+
+        return direction.normalized;
+    }
+
+    //=========================================================
+    // DELAY GAME OVER AFTER IMPACT
+    //=========================================================
+
+private IEnumerator DelayedImpactGameOver()
+{
+    yield return new WaitForSeconds(0.75f);
+
+    Debug.Log(
+        "[PlayerController] DELAYED GAME OVER | " +
+        "GameManager.Instance = " +
+        (GameManager.Instance != null ? "FOUND" : "NULL")
+    );
+
+    if (GameManager.Instance != null)
+    {
+        GameManager.Instance.GameOver();
+    }
+
+    impactGameOverCoroutine = null;
+}
+
+//=========================================================
+// DELAY GAME OVER AFTER EXCITER IMPACT
+//=========================================================
+
+private IEnumerator DelayedExciterGameOver()
+{
+    // Cho Player bay + xoay trên không
+    // trước khi chuyển sang Game Over.
+
+    yield return new WaitForSeconds(
+        1.25f
+    );
+
+    if (GameManager.Instance != null)
+    {
+        GameManager.Instance.GameOver();
+    }
+
+    impactGameOverCoroutine =
+        null;
+}
+private void SpawnImpactExplosion(Vector3 position)
+{
+    if (!enableExplosionAnimation)
+        return;
+
+    if (explosionEffectPrefab == null)
+    {
+        Debug.LogWarning(
+            "EXPLOSION: Chưa gán Explosion Effect Prefab trong PlayerController."
+        );
+        return;
+    }
+
+    GameObject explosion =
+        Instantiate(
+            explosionEffectPrefab,
+            position,
+            Quaternion.identity
+        );
+
+    ParticleSystem[] particles =
+        explosion.GetComponentsInChildren<ParticleSystem>();
+
+    float maxLifetime = 0f;
+
+    foreach (ParticleSystem particle in particles)
+    {
+        var main = particle.main;
+
+        float lifetime =
+            main.startLifetime.constantMax;
+
+        if (lifetime > maxLifetime)
+            maxLifetime = lifetime;
+    }
+
+    if (maxLifetime <= 0f)
+        maxLifetime = 2f;
+
+    Destroy(explosion, maxLifetime + 0.5f);
+}
+
+private void EnableDeathPhysics()
+{
+    Collider[] colliders =
+        GetComponentsInChildren<Collider>();
+
+    for (int i = 0; i < colliders.Length; i++)
+    {
+        Collider col = colliders[i];
+
+        if (col == null)
+            continue;
+
+        // Không xử lý collider của Particle System
+        if (col.GetComponent<ParticleSystem>() != null)
+            continue;
+
+        col.isTrigger = false;
+    }
+
+    if (rb != null)
+    {
+        rb.isKinematic = false;
+        rb.useGravity = true;
+
+        rb.detectCollisions = true;
+
+        rb.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousDynamic;
+
+        rb.interpolation =
+            RigidbodyInterpolation.Interpolate;
+
+        rb.linearDamping =
+            knockbackDrag;
+
+        rb.angularDamping =
+            knockbackAngularDrag;
+    }
+
+    if (knockbackDebug)
+    {
+        Debug.Log(
+            "[PlayerController] " +
+            "DEATH PHYSICS ENABLED | " +
+            "Colliders = NON-TRIGGER | " +
+            "Collision Detection = ContinuousDynamic"
+        );
+    }
+}
+
 }

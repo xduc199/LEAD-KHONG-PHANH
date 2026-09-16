@@ -60,6 +60,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -2370043759572995992, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
     - target: {fileID: -447275898630060098, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.5
@@ -76,10 +80,30 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Obstacle
       objectReference: {fileID: 0}
+    - target: {fileID: 5192790784378386916, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
+    - target: {fileID: 5971171512082944913, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
+    - target: {fileID: 7304312020352845297, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
+    - target: {fileID: 7536967077601003490, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
     - target: {fileID: 7548485351514857559, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: f96821bbefeea864b9b418af4b8615ac, type: 2}
+    - target: {fileID: 8218214831007595840, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
+      propertyPath: m_TagString
+      value: Obstacle
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
     - {fileID: 65702495048144492, guid: 4637b2684e774844ca0434705d81f71f, type: 3}
@@ -187,10 +211,14 @@ MonoBehaviour:
   minimumSpeed: 5
   playerSpeedMargin: 1
   moveForward: 1
+  vehicleHeightY: -0.35
   knockbackDuration: 2.5
   destroyDelay: 0.25
   spinForce: 18
   disableCollidersWhenKnocked: 1
+  photonUpwardVelocity: 12
+  photonForwardVelocity: 20
+  photonSideVelocity: 4
 --- !u!114 &-6137005782460686480
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -224,6 +252,12 @@ MonoBehaviour:
   strongBrakeDistance: 8
   hardSafetyDistance: 4.5
   brakingMultiplier: 0.85
+  stuckSpeedThreshold: 2.5
+  stuckDuration: 2.5
+  stuckFrontSafety: 13
+  stuckRearSafety: 13
+  stuckRecoveryCooldown: 2
+  enableStuckRecovery: 1
   playerSafetyDistance: 22
   playerLaneTolerance: 2.5
   playerFrontBlockDistance: 22

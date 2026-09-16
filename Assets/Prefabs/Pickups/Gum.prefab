@@ -140,5 +140,5 @@ MonoBehaviour:
   floatSpeed: 2
   collectRadius: 0.8
   destroyOnCollect: 1
-  collectSound: {fileID: 0}
+  collectSound: {fileID: 8300000, guid: 54749050d8db6bf4586daae325c62394, type: 3}
   collectVolume: 1
