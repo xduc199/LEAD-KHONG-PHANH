@@ -352,14 +352,17 @@ public class TrafficCarBehavior : MonoBehaviour
 
     private void SnapToLane()
     {
-        Vector3 position =
-            transform.position;
+        float laneX = GetLaneX(laneIndex);
 
-        position.x =
-            GetLaneX(laneIndex);
+        if (vehicle != null)
+        {
+            vehicle.SetImmediateLaneX(laneX);
+            return;
+        }
 
-        transform.position =
-            position;
+        Vector3 position = transform.position;
+        position.x = laneX;
+        transform.position = position;
     }
 
 
@@ -1156,7 +1159,9 @@ public class TrafficCarBehavior : MonoBehaviour
     )
     {
         float startX =
-            transform.position.x;
+            vehicle != null
+                ? vehicle.PhysicsPositionX
+                : transform.position.x;
 
         float targetX =
             GetLaneX(
@@ -1768,7 +1773,9 @@ public class TrafficCarBehavior : MonoBehaviour
     )
     {
         float startX =
-            transform.position.x;
+            vehicle != null
+                ? vehicle.PhysicsPositionX
+                : transform.position.x;
 
 
         float targetX =
@@ -1902,7 +1909,9 @@ public class TrafficCarBehavior : MonoBehaviour
 
 
         laneStartX =
-            transform.position.x;
+            vehicle != null
+                ? vehicle.PhysicsPositionX
+                : transform.position.x;
 
 
         laneTargetX =
@@ -1943,10 +1952,7 @@ public class TrafficCarBehavior : MonoBehaviour
         if (!isChangingLane)
             return;
 
-
-        laneChangeTimer +=
-            Time.deltaTime;
-
+        laneChangeTimer += Time.deltaTime;
 
         float progress =
             Mathf.Clamp01(
@@ -1957,11 +1963,6 @@ public class TrafficCarBehavior : MonoBehaviour
                 )
             );
 
-
-        //=====================================================
-        // SMOOTH POSITION
-        //=====================================================
-
         float smooth =
             Mathf.SmoothStep(
                 0f,
@@ -1969,22 +1970,25 @@ public class TrafficCarBehavior : MonoBehaviour
                 progress
             );
 
-
-        Vector3 position =
-            transform.position;
-
-
-        position.x =
+        //=====================================================
+        // SINGLE POSITION OWNER
+        //=====================================================
+        //
+        // TrafficCarBehavior chỉ tính desired X.
+        // TrafficVehicle.FixedUpdate() mới commit X/Z/Y
+        // bằng Rigidbody.MovePosition().
+        //
+        float desiredX =
             Mathf.Lerp(
                 laneStartX,
                 laneTargetX,
                 smooth
             );
 
-
-        transform.position =
-            position;
-
+        if (vehicle != null)
+        {
+            vehicle.SetDesiredLaneX(desiredX);
+        }
 
         //=====================================================
         // STEERING DIRECTION
@@ -1996,7 +2000,6 @@ public class TrafficCarBehavior : MonoBehaviour
                 laneStartX
             );
 
-
         //=====================================================
         // STEERING CURVE
         //=====================================================
@@ -2007,14 +2010,12 @@ public class TrafficCarBehavior : MonoBehaviour
                 Mathf.PI
             );
 
-
         //=====================================================
         // VEHICLE TYPE MULTIPLIER
         //=====================================================
 
         float steeringMultiplier =
             GetVehicleSteeringMultiplier();
-
 
         //=====================================================
         // Y ROTATION
@@ -2026,7 +2027,6 @@ public class TrafficCarBehavior : MonoBehaviour
             steeringCurve *
             steeringMultiplier;
 
-
         //=====================================================
         // Z LEAN
         //=====================================================
@@ -2037,14 +2037,12 @@ public class TrafficCarBehavior : MonoBehaviour
             steeringCurve *
             steeringMultiplier;
 
-
         Quaternion targetRotation =
             Quaternion.Euler(
                 0f,
                 targetY,
                 targetZ
             );
-
 
         transform.rotation =
             Quaternion.Lerp(
@@ -2054,37 +2052,43 @@ public class TrafficCarBehavior : MonoBehaviour
                 rotationSpeed
             );
 
-
         //=====================================================
         // FINISH
         //=====================================================
 
         if (progress >= 1f)
         {
-            transform.position =
-                new Vector3(
-                    laneTargetX,
-                    transform.position.y,
-                    transform.position.z
+            // Commit final X through the same owner.
+            if (vehicle != null)
+            {
+                vehicle.SetImmediateLaneX(
+                    laneTargetX
                 );
+            }
+            else
+            {
+                Vector3 position =
+                    transform.position;
 
+                position.x =
+                    laneTargetX;
+
+                transform.position =
+                    position;
+            }
 
             laneIndex =
                 targetLane;
 
-
             isChangingLane =
                 false;
-
 
             laneChangeCooldownTimer =
                 laneChangeCooldown;
 
-
             ResetStuckState();
 
             RestoreSpeed();
-
 
             if (debugLogs)
             {

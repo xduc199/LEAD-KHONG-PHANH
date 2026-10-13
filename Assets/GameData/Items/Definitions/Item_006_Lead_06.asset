@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_006_Lead_06
+  m_EditorClassIdentifier: 
+  itemId: 6
+  itemName: Lead Trung Thu
+  description: "Phong c\xE1ch l\u1EC5 h\u1ED9i \u0111\xEAm v\u1EDBi \u0111\xE8n l\u1ED3ng
+    v\xE0 h\u1ECDa ti\u1EBFt Trung Thu."
+  category: 0
+  subCategory: "\u0110\u1EB7c Bi\u1EC7t"
+  rarity: 2
+  icon: {fileID: 0}
+  prefab: {fileID: 6326726421732722259, guid: ca839e910b7b79a4e8ac8423eb2c80ff, type: 3}
+  visualId: VISUAL_ITEM_006
+  purchasable: 1
+  price: 1000
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 2
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 8
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 8
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 2, Acceleration: 8, Handling: 8'
+  passiveDescription: Lead 06 - Vehicle Uncommon

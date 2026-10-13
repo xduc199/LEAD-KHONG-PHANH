@@ -2,13 +2,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class PauseMenuController : MonoBehaviour
+[DisallowMultipleComponent]
+public sealed class PauseMenuController : MonoBehaviour
 {
     //=============================================================
     // PAUSE UI
     //=============================================================
 
-    [Header("Pause UI")]
+    [Header("PAUSE UI")]
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private CanvasGroup canvasGroup;
     [SerializeField] private RectTransform panelRect;
@@ -18,21 +19,31 @@ public class PauseMenuController : MonoBehaviour
     // PAUSE BUTTONS
     //=============================================================
 
-    [Header("Pause Buttons")]
+    [Header("PAUSE BUTTONS")]
     [SerializeField] private Button resumeButton;
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button mainMenuButton;
 
 
     //=============================================================
-    // SETTINGS
+    // GAMEPLAY SETTINGS
     //=============================================================
 
-    [Header("Settings")]
-    [Tooltip("Panel Settings được mở từ Pause Menu.")]
+    [Header("GAMEPLAY SETTINGS")]
+    [Tooltip(
+        "GameplaySettingsUI dùng chung cho Settings của Gameplay. " +
+        "Nếu để trống, hệ thống sẽ tự lấy GameplaySettingsUI.Instance."
+    )]
+    [SerializeField] private GameplaySettingsUI gameplaySettingsUI;
+
+    [Tooltip(
+        "Fallback cho scene cũ. Không cần dùng nếu GameplaySettingsUI đã được Setup."
+    )]
     [SerializeField] private GameObject settingsPanel;
 
-    [Tooltip("Nút đóng Settings Panel.")]
+    [Tooltip(
+        "Nút đóng Settings của scene cũ. Có thể để trống khi dùng GameplaySettingsUI mới."
+    )]
     [SerializeField] private Button closeSettingsButton;
 
 
@@ -40,10 +51,10 @@ public class PauseMenuController : MonoBehaviour
     // ANIMATION
     //=============================================================
 
-    [Header("Animation")]
+    [Header("ANIMATION")]
     [SerializeField] private float animationSpeed = 12f;
 
-    [Tooltip("Scale ban đầu của Panel khi mở.")]
+    [Tooltip("Scale ban đầu của Pause Panel khi mở.")]
     [SerializeField] private float hiddenScale = 0.88f;
 
 
@@ -51,7 +62,7 @@ public class PauseMenuController : MonoBehaviour
     // SCENE
     //=============================================================
 
-    [Header("Scene")]
+    [Header("SCENE")]
     [SerializeField] private string mainMenuSceneName = "MainMenu";
 
 
@@ -91,6 +102,15 @@ public class PauseMenuController : MonoBehaviour
         {
             panelBaseScale = panelRect.localScale;
         }
+        else if (pausePanel != null)
+        {
+            panelRect = pausePanel.GetComponent<RectTransform>();
+
+            if (panelRect != null)
+            {
+                panelBaseScale = panelRect.localScale;
+            }
+        }
 
 
         //---------------------------------------------------------
@@ -99,15 +119,20 @@ public class PauseMenuController : MonoBehaviour
 
         if (canvasGroup == null && pausePanel != null)
         {
-            canvasGroup =
-                pausePanel.GetComponent<CanvasGroup>();
+            canvasGroup = pausePanel.GetComponent<CanvasGroup>();
 
             if (canvasGroup == null)
             {
-                canvasGroup =
-                    pausePanel.AddComponent<CanvasGroup>();
+                canvasGroup = pausePanel.AddComponent<CanvasGroup>();
             }
         }
+
+
+        //---------------------------------------------------------
+        // Resolve Gameplay Settings
+        //---------------------------------------------------------
+
+        ResolveGameplaySettings();
 
 
         //---------------------------------------------------------
@@ -139,10 +164,7 @@ public class PauseMenuController : MonoBehaviour
         // Settings phải đóng lúc bắt đầu
         //---------------------------------------------------------
 
-        if (settingsPanel != null)
-        {
-            settingsPanel.SetActive(false);
-        }
+        CloseSettingsImmediate();
     }
 
 
@@ -170,6 +192,30 @@ public class PauseMenuController : MonoBehaviour
         {
             AnimatePauseIn();
         }
+    }
+
+
+    //=============================================================
+    // RESOLVE GAMEPLAY SETTINGS
+    //=============================================================
+
+    private void ResolveGameplaySettings()
+    {
+        //---------------------------------------------------------
+        // Nếu đã gán Inspector thì giữ nguyên.
+        //---------------------------------------------------------
+
+        if (gameplaySettingsUI != null)
+        {
+            return;
+        }
+
+
+        //---------------------------------------------------------
+        // Lấy Singleton nếu đã tồn tại.
+        //---------------------------------------------------------
+
+        gameplaySettingsUI = GameplaySettingsUI.Instance;
     }
 
 
@@ -213,7 +259,7 @@ public class PauseMenuController : MonoBehaviour
 
 
         //---------------------------------------------------------
-        // Close Settings
+        // Close Settings - Fallback
         //---------------------------------------------------------
 
         if (closeSettingsButton != null)
@@ -248,7 +294,9 @@ public class PauseMenuController : MonoBehaviour
     public void Pause()
     {
         if (isPaused)
+        {
             return;
+        }
 
 
         //---------------------------------------------------------
@@ -266,13 +314,10 @@ public class PauseMenuController : MonoBehaviour
 
 
         //---------------------------------------------------------
-        // Close Settings If Open
+        // Close Settings
         //---------------------------------------------------------
 
-        if (settingsPanel != null)
-        {
-            settingsPanel.SetActive(false);
-        }
+        CloseSettingsImmediate();
 
 
         //---------------------------------------------------------
@@ -310,7 +355,9 @@ public class PauseMenuController : MonoBehaviour
     public void Resume()
     {
         if (!isPaused)
+        {
             return;
+        }
 
 
         //---------------------------------------------------------
@@ -331,10 +378,7 @@ public class PauseMenuController : MonoBehaviour
         // Close Settings
         //---------------------------------------------------------
 
-        if (settingsPanel != null)
-        {
-            settingsPanel.SetActive(false);
-        }
+        CloseSettingsImmediate();
 
 
         //---------------------------------------------------------
@@ -349,27 +393,49 @@ public class PauseMenuController : MonoBehaviour
 
 
     //=============================================================
-    // SETTINGS
+    // OPEN SETTINGS
     //=============================================================
 
     public void OpenSettings()
     {
-        if (settingsPanel == null)
-        {
-            Debug.LogWarning(
-                "[PauseMenuController] Settings Panel chưa được gán.",
-                this
-            );
+        //---------------------------------------------------------
+        // Nếu GameplaySettingsUI chưa được resolve
+        //---------------------------------------------------------
 
+        ResolveGameplaySettings();
+
+
+        //---------------------------------------------------------
+        // Ưu tiên hệ thống Settings mới
+        //---------------------------------------------------------
+
+        if (gameplaySettingsUI != null)
+        {
+            gameplaySettingsUI.Open();
             return;
         }
 
 
         //---------------------------------------------------------
-        // Open Settings
+        // Fallback hệ thống cũ
         //---------------------------------------------------------
 
-        settingsPanel.SetActive(true);
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(true);
+            return;
+        }
+
+
+        //---------------------------------------------------------
+        // Không tìm thấy Settings
+        //---------------------------------------------------------
+
+        Debug.LogWarning(
+            "[PauseMenuController] Không tìm thấy GameplaySettingsUI " +
+            "và Settings Panel fallback cũng chưa được gán.",
+            this
+        );
     }
 
 
@@ -379,11 +445,54 @@ public class PauseMenuController : MonoBehaviour
 
     public void CloseSettings()
     {
-        if (settingsPanel == null)
+        //---------------------------------------------------------
+        // Ưu tiên hệ thống Settings mới
+        //---------------------------------------------------------
+
+        if (gameplaySettingsUI != null)
+        {
+            gameplaySettingsUI.Close();
             return;
+        }
 
 
-        settingsPanel.SetActive(false);
+        //---------------------------------------------------------
+        // Fallback hệ thống cũ
+        //---------------------------------------------------------
+
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+    }
+
+
+    //=============================================================
+    // CLOSE SETTINGS IMMEDIATE
+    //=============================================================
+
+    private void CloseSettingsImmediate()
+    {
+        //---------------------------------------------------------
+        // GameplaySettingsUI
+        //---------------------------------------------------------
+
+        if (gameplaySettingsUI != null &&
+            gameplaySettingsUI.IsOpen)
+        {
+            gameplaySettingsUI.Close();
+        }
+
+
+        //---------------------------------------------------------
+        // Fallback Panel
+        //---------------------------------------------------------
+
+        if (settingsPanel != null &&
+            settingsPanel.activeSelf)
+        {
+            settingsPanel.SetActive(false);
+        }
     }
 
 
@@ -400,6 +509,38 @@ public class PauseMenuController : MonoBehaviour
         Time.timeScale = 1f;
 
         isPaused = false;
+
+
+        //---------------------------------------------------------
+        // Close Settings
+        //---------------------------------------------------------
+
+        CloseSettingsImmediate();
+
+
+        //---------------------------------------------------------
+        // Hide Pause Panel
+        //---------------------------------------------------------
+
+        if (pausePanel != null)
+        {
+            pausePanel.SetActive(false);
+        }
+
+
+        //---------------------------------------------------------
+        // Validate Scene Name
+        //---------------------------------------------------------
+
+        if (string.IsNullOrEmpty(mainMenuSceneName))
+        {
+            Debug.LogError(
+                "[PauseMenuController] Main Menu Scene Name đang trống.",
+                this
+            );
+
+            return;
+        }
 
 
         //---------------------------------------------------------
@@ -439,12 +580,15 @@ public class PauseMenuController : MonoBehaviour
 
         if (canvasGroup != null)
         {
+            float t =
+                animationSpeed *
+                Time.unscaledDeltaTime;
+
             canvasGroup.alpha =
                 Mathf.Lerp(
                     canvasGroup.alpha,
                     1f,
-                    animationSpeed *
-                    Time.unscaledDeltaTime
+                    t
                 );
         }
 
@@ -455,12 +599,15 @@ public class PauseMenuController : MonoBehaviour
 
         if (panelRect != null)
         {
+            float t =
+                animationSpeed *
+                Time.unscaledDeltaTime;
+
             panelRect.localScale =
                 Vector3.Lerp(
                     panelRect.localScale,
                     panelBaseScale,
-                    animationSpeed *
-                    Time.unscaledDeltaTime
+                    t
                 );
         }
     }
@@ -500,6 +647,17 @@ public class PauseMenuController : MonoBehaviour
         {
             panelRect.localScale = panelBaseScale;
         }
+    }
+
+
+    //=============================================================
+    // PUBLIC SETTER
+    //=============================================================
+
+    public void SetGameplaySettingsUI(
+        GameplaySettingsUI target)
+    {
+        gameplaySettingsUI = target;
     }
 
 

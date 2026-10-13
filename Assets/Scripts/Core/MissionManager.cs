@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -18,9 +17,12 @@ public class MissionManager : MonoBehaviour
     // SETTINGS
     // =========================================================
 
-    private const int DailyMissionCount = 3;
+    private const int DailyMissionCount = 6;
 
     private const float SaveDelay = 0.75f;
+
+    // Phải khớp tên scene Gameplay thực tế.
+    private const string GameplaySceneName = "GameplayScene";
 
 
     // =========================================================
@@ -54,6 +56,8 @@ public class MissionManager : MonoBehaviour
 
         public int expReward;
 
+        public int goldReward;
+
 
         public MissionTemplate(
             string id,
@@ -61,7 +65,8 @@ public class MissionManager : MonoBehaviour
             string description,
             MissionType type,
             int target,
-            int expReward)
+            int expReward,
+            int goldReward)
         {
             this.id = id;
             this.title = title;
@@ -69,6 +74,7 @@ public class MissionManager : MonoBehaviour
             this.type = type;
             this.target = target;
             this.expReward = expReward;
+            this.goldReward = goldReward;
         }
     }
 
@@ -97,6 +103,8 @@ public class MissionManager : MonoBehaviour
 
         [Header("Reward")]
         public int expReward;
+
+        public int goldReward;
 
 
         [HideInInspector]
@@ -160,9 +168,18 @@ public class MissionManager : MonoBehaviour
     // CURRENT RUN TRACKING
     // =========================================================
 
+    // Các biến này CHỈ có ý nghĩa trong GameplayScene.
+    // Tuyệt đối không dùng chúng ở MainMenu.
     private int lastRunCoins;
 
     private int lastRunDistance;
+
+
+    // =========================================================
+    // GAMEPLAY STATE
+    // =========================================================
+
+    private bool isGameplaySceneActive;
 
 
     // =========================================================
@@ -191,6 +208,13 @@ public class MissionManager : MonoBehaviour
     private Coroutine delayedSaveCoroutine;
 
 
+    // Claim lock: prevents double-click / duplicate reward
+    // while EXP + Gold are being persisted.
+    private bool claimInProgress;
+
+    private string claimMissionId;
+
+
     // =========================================================
     // EVENTS
     // =========================================================
@@ -206,6 +230,14 @@ public class MissionManager : MonoBehaviour
 
     public Action
         OnDailyMissionsGenerated;
+
+    /// <summary>
+    /// Fired once when every daily mission is claimed.
+    /// MissionManager does not know anything about Lucky Wheel.
+    /// A separate bridge can subscribe to this event later.
+    /// </summary>
+    public Action
+        OnAllDailyMissionsClaimed;
 
 
     // =========================================================
@@ -235,9 +267,20 @@ public class MissionManager : MonoBehaviour
 
         BuildMissionPool();
 
+        // MissionManager khởi tạo theo scene hiện tại.
+        isGameplaySceneActive =
+            SceneManager.GetActiveScene().name ==
+            GameplaySceneName;
+
         Debug.Log(
             $"[MissionManager] Mission Pool: " +
             $"{missionPool.Count} nhiệm vụ."
+        );
+
+        Debug.Log(
+            $"[MissionManager] Initial Scene = " +
+            $"{SceneManager.GetActiveScene().name} | " +
+            $"GameplayActive = {isGameplaySceneActive}"
         );
     }
 
@@ -550,10 +593,15 @@ public class MissionManager : MonoBehaviour
 
         saveAgainAfterCurrentSave = false;
 
+        claimInProgress = false;
 
-        UnsubscribeGameManager();
+        claimMissionId = null;
 
-        UnsubscribePlayerProgression();
+
+        isGameplaySceneActive = false;
+
+
+        UnsubscribeFromSystems();
 
 
         connectedGameManager = null;
@@ -578,6 +626,38 @@ public class MissionManager : MonoBehaviour
         Scene scene,
         LoadSceneMode mode)
     {
+        bool gameplay =
+            scene.name ==
+            GameplaySceneName;
+
+
+        isGameplaySceneActive =
+            gameplay;
+
+
+        Debug.Log(
+            $"[MissionManager] Scene Loaded → " +
+            $"{scene.name} | " +
+            $"Gameplay = {gameplay}"
+        );
+
+
+        if (!gameplay)
+        {
+            // MainMenu / Garage / Login / scene khác:
+            //
+            // KHÔNG được giữ GameManager run-state.
+            //
+            // Daily mission data vẫn giữ nguyên.
+            DisconnectGameplaySystems();
+
+            return;
+        }
+
+
+        // Gameplay vừa load.
+        // Chờ 1 frame để GameManager / Player / PlayerProgression
+        // hoàn tất Awake/Start.
         StartCoroutine(
             BindSystemsNextFrame()
         );
@@ -591,19 +671,70 @@ public class MissionManager : MonoBehaviour
     private void HandleSceneUnloaded(
         Scene scene)
     {
+        if (
+            scene.name ==
+            GameplaySceneName
+        )
+        {
+            Debug.Log(
+                "[MissionManager] GameplayScene unloaded → " +
+                "Disconnect Gameplay systems."
+            );
+
+
+            DisconnectGameplaySystems();
+        }
+    }
+
+
+    // =========================================================
+    // DISCONNECT GAMEPLAY SYSTEMS
+    // =========================================================
+
+    private void DisconnectGameplaySystems()
+    {
+        // -----------------------------------------------------
+        // GAME MANAGER
+        // -----------------------------------------------------
+
         UnsubscribeGameManager();
 
         connectedGameManager = null;
 
 
-        UnsubscribePlayerProgression();
+        // -----------------------------------------------------
+        // CURRENT RUN BASELINE
+        // -----------------------------------------------------
 
-        connectedPlayerProgression = null;
+        lastRunCoins = 0;
+
+        lastRunDistance = 0;
+
+
+        // -----------------------------------------------------
+        // PLAYER PROGRESSION
+        // -----------------------------------------------------
+        //
+        // PlayerProgression là persistent progression.
+        //
+        // Không bắt buộc phải unsubscribe ở MainMenu.
+        // Tuy nhiên để tránh duplicate binding khi scene
+        // thay đổi và PlayerProgression được recreate,
+        // TryBindSystems() sẽ resolve lại reference.
+        //
+        // Ta giữ progression subscription nếu object vẫn sống.
+        //
+        // -----------------------------------------------------
+
+        Debug.Log(
+            "[MissionManager] Gameplay binding disconnected. " +
+            "Daily counters được giữ nguyên."
+        );
     }
 
 
     // =========================================================
-    // BIND SYSTEMS
+    // BIND SYSTEMS NEXT FRAME
     // =========================================================
 
     private IEnumerator BindSystemsNextFrame()
@@ -614,6 +745,10 @@ public class MissionManager : MonoBehaviour
     }
 
 
+    // =========================================================
+    // BIND SYSTEMS
+    // =========================================================
+
     private void TryBindSystems()
     {
         if (!accountInitialized)
@@ -623,39 +758,91 @@ public class MissionManager : MonoBehaviour
 
 
         // =====================================================
-        // GAME MANAGER
+        // CHECK ACTIVE SCENE
         // =====================================================
 
-        GameManager currentGameManager =
-            GameManager.Instance;
+        Scene activeScene =
+            SceneManager.GetActiveScene();
 
 
-        if (
-            currentGameManager !=
-            connectedGameManager
-        )
+        bool gameplay =
+            activeScene.name ==
+            GameplaySceneName;
+
+
+        isGameplaySceneActive =
+            gameplay;
+
+
+        // =====================================================
+        // GAME MANAGER
+        // =====================================================
+        //
+        // GameManager là RUN-SCOPED.
+        //
+        // Chỉ bind khi GameplayScene active.
+        //
+        // Đây là điểm quan trọng nhất của fix.
+        // =====================================================
+
+        if (gameplay)
         {
+            GameManager currentGameManager =
+                GameManager.Instance;
+
+
+            if (
+                currentGameManager !=
+                connectedGameManager
+            )
+            {
+                if (connectedGameManager != null)
+                {
+                    UnsubscribeGameManager();
+                }
+
+
+                connectedGameManager =
+                    currentGameManager;
+
+
+                if (connectedGameManager != null)
+                {
+                    SubscribeGameManager();
+
+                    InitializeCurrentRunCounters();
+
+
+                    Debug.Log(
+                        "[MissionManager] Đã Bind GameManager " +
+                        "trong Gameplay."
+                    );
+                }
+            }
+        }
+        else
+        {
+            // Không bao giờ bind GameManager ở MainMenu.
             if (connectedGameManager != null)
             {
                 UnsubscribeGameManager();
+
+                connectedGameManager = null;
             }
 
 
-            connectedGameManager =
-                currentGameManager;
+            lastRunCoins = 0;
 
-
-            if (connectedGameManager != null)
-            {
-                SubscribeGameManager();
-
-                InitializeCurrentRunCounters();
-            }
+            lastRunDistance = 0;
         }
 
 
         // =====================================================
         // PLAYER PROGRESSION
+        // =====================================================
+        //
+        // PlayerProgression là account progression.
+        // Có thể tồn tại ở MainMenu.
         // =====================================================
 
         PlayerProgression currentProgression =
@@ -684,6 +871,11 @@ public class MissionManager : MonoBehaviour
                 SyncPreviousExpReference();
 
                 CheckProgressionMissions();
+
+
+                Debug.Log(
+                    "[MissionManager] Đã Bind PlayerProgression."
+                );
             }
         }
     }
@@ -779,6 +971,13 @@ public class MissionManager : MonoBehaviour
         connectedGameManager = null;
 
         connectedPlayerProgression = null;
+
+
+        lastRunCoins = 0;
+
+        lastRunDistance = 0;
+
+        isGameplaySceneActive = false;
     }
 
 
@@ -789,7 +988,6 @@ public class MissionManager : MonoBehaviour
     private void BuildMissionPool()
     {
         missionPool.Clear();
-
 
         // =====================================================
         // COINS
@@ -802,10 +1000,10 @@ public class MissionManager : MonoBehaviour
                 "Thu thập 30 đồng vàng.",
                 MissionType.CollectCoins,
                 30,
-                30
+                30,
+                100
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -814,10 +1012,10 @@ public class MissionManager : MonoBehaviour
                 "Thu thập 50 đồng vàng.",
                 MissionType.CollectCoins,
                 50,
-                50
+                50,
+                150
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -826,10 +1024,22 @@ public class MissionManager : MonoBehaviour
                 "Thu thập 100 đồng vàng.",
                 MissionType.CollectCoins,
                 100,
-                100
+                100,
+                300
             )
         );
 
+        missionPool.Add(
+            new MissionTemplate(
+                "coin_200",
+                "Máy In Tiền",
+                "Thu thập 200 đồng vàng.",
+                MissionType.CollectCoins,
+                200,
+                150,
+                500
+            )
+        );
 
         // =====================================================
         // DISTANCE
@@ -842,10 +1052,10 @@ public class MissionManager : MonoBehaviour
                 "Chạy được 500m.",
                 MissionType.TravelDistance,
                 500,
-                40
+                40,
+                100
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -854,10 +1064,10 @@ public class MissionManager : MonoBehaviour
                 "Chạy được 1000m.",
                 MissionType.TravelDistance,
                 1000,
-                80
+                80,
+                200
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -866,10 +1076,22 @@ public class MissionManager : MonoBehaviour
                 "Chạy được 2000m.",
                 MissionType.TravelDistance,
                 2000,
-                150
+                150,
+                400
             )
         );
 
+        missionPool.Add(
+            new MissionTemplate(
+                "distance_5000",
+                "Lead Bất Tử",
+                "Chạy được 5000m.",
+                MissionType.TravelDistance,
+                5000,
+                250,
+                750
+            )
+        );
 
         // =====================================================
         // RUNS
@@ -878,38 +1100,38 @@ public class MissionManager : MonoBehaviour
         missionPool.Add(
             new MissionTemplate(
                 "runs_2",
-                "Không Bỏ Cuộc",
+                "Khởi Động",
                 "Hoàn thành 2 lượt chơi.",
                 MissionType.CompleteRuns,
                 2,
-                50
+                50,
+                150
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
                 "runs_3",
-                "Chạy Lại Nữa",
+                "Tay Lái",
                 "Hoàn thành 3 lượt chơi.",
                 MissionType.CompleteRuns,
                 3,
-                75
+                75,
+                250
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
                 "runs_5",
-                "Máu Liều",
+                "Quái Xế Chính Hiệu",
                 "Hoàn thành 5 lượt chơi.",
                 MissionType.CompleteRuns,
                 5,
-                120
+                120,
+                400
             )
         );
-
 
         // =====================================================
         // EXP
@@ -922,10 +1144,10 @@ public class MissionManager : MonoBehaviour
                 "Kiếm 100 EXP trong ngày.",
                 MissionType.EarnExp,
                 100,
-                50
+                50,
+                100
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -934,10 +1156,22 @@ public class MissionManager : MonoBehaviour
                 "Kiếm 250 EXP trong ngày.",
                 MissionType.EarnExp,
                 250,
-                100
+                100,
+                250
             )
         );
 
+        missionPool.Add(
+            new MissionTemplate(
+                "exp_500",
+                "Kinh Nghiệm Đầy Mình",
+                "Kiếm 500 EXP trong ngày.",
+                MissionType.EarnExp,
+                500,
+                200,
+                500
+            )
+        );
 
         // =====================================================
         // LEVEL
@@ -950,10 +1184,10 @@ public class MissionManager : MonoBehaviour
                 "Đạt Level 3.",
                 MissionType.ReachLevel,
                 3,
-                75
+                75,
+                150
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -962,10 +1196,10 @@ public class MissionManager : MonoBehaviour
                 "Đạt Level 5.",
                 MissionType.ReachLevel,
                 5,
-                150
+                150,
+                350
             )
         );
-
 
         missionPool.Add(
             new MissionTemplate(
@@ -974,7 +1208,8 @@ public class MissionManager : MonoBehaviour
                 "Đạt Level 10.",
                 MissionType.ReachLevel,
                 10,
-                300
+                300,
+                1000
             )
         );
     }
@@ -1285,6 +1520,13 @@ public class MissionManager : MonoBehaviour
             );
 
 
+        mission.goldReward =
+            Mathf.Max(
+                0,
+                template.goldReward
+            );
+
+
         mission.progress = 0;
 
         mission.claimed = false;
@@ -1583,6 +1825,7 @@ public class MissionManager : MonoBehaviour
                     return connectedPlayerProgression.Level;
                 }
 
+
                 if (
                     firestoreManager != null &&
                     firestoreManager.CurrentPlayerData != null
@@ -1592,6 +1835,7 @@ public class MissionManager : MonoBehaviour
                         .CurrentPlayerData
                         .level;
                 }
+
 
                 return 0;
         }
@@ -1779,7 +2023,8 @@ public class MissionManager : MonoBehaviour
         for (
             int i = 0;
             i < missions.Count;
-            i++)
+            i++
+        )
         {
             Mission mission =
                 missions[i];
@@ -1836,7 +2081,8 @@ public class MissionManager : MonoBehaviour
         for (
             int i = 0;
             i < missions.Count;
-            i++)
+            i++
+        )
         {
             Mission mission =
                 missions[i];
@@ -1875,36 +2121,24 @@ public class MissionManager : MonoBehaviour
     // =========================================================
 
     private string ExtractTemplateId(
-    string missionId)
-{
-    if (string.IsNullOrEmpty(missionId))
-        return string.Empty;
+        string missionId)
+    {
+        if (string.IsNullOrEmpty(missionId))
+            return string.Empty;
 
 
-    // Mission ID có dạng:
-    //
-    // yyyyMMdd_templateId
-    //
-    // Ví dụ:
-    // 20260912_coin_30
-    // 20260912_distance_1000
-    //
-    // Chỉ bỏ phần ngày ở trước dấu "_" đầu tiên.
-    // Phải giữ nguyên phần template ID phía sau,
-    // kể cả khi template ID có nhiều dấu "_".
-
-    int separator =
-        missionId.IndexOf("_");
+        int separator =
+            missionId.IndexOf("_");
 
 
-    if (separator < 0)
-        return missionId;
+        if (separator < 0)
+            return missionId;
 
 
-    return missionId.Substring(
-        separator + 1
-    );
-}
+        return missionId.Substring(
+            separator + 1
+        );
+    }
 
 
     // =========================================================
@@ -2073,98 +2307,94 @@ public class MissionManager : MonoBehaviour
 
 
     private async void SaveMissionDataAsync()
-{
-    if (saveInProgress)
     {
-        saveAgainAfterCurrentSave = true;
-        return;
-    }
-
-    if (
-        firestoreManager == null ||
-        !firestoreManager.HasPlayerData ||
-        firestoreManager.CurrentPlayerData == null
-    )
-    {
-        return;
-    }
-
-    saveInProgress = true;
-    saveAgainAfterCurrentSave = false;
-
-    string uid =
-        firestoreManager.CurrentPlayerData.uid;
-
-    bool success = false;
-
-    try
-    {
-        success =
-            await firestoreManager
-                .SaveMissionDataAsync();
-    }
-    catch (Exception exception)
-    {
-        Debug.LogError(
-            $"[MissionManager] Mission save exception: {exception}"
-        );
-    }
-
-    saveInProgress = false;
-
-
-    // =====================================================
-    // KIỂM TRA CÓ THAY ĐỔI TRONG KHI ĐANG SAVE KHÔNG
-    // =====================================================
-
-    bool needsAnotherSave =
-        saveAgainAfterCurrentSave;
-
-    saveAgainAfterCurrentSave = false;
-
-
-    // =====================================================
-    // SAVE THÀNH CÔNG
-    // =====================================================
-
-    if (success)
-    {
-        Debug.Log(
-            $"[MissionManager] Mission saved → UID: {uid}"
-        );
-
-
-        // Nếu trong lúc save vừa rồi có thay đổi mới,
-        // KHÔNG được set dirty = false.
-        if (!needsAnotherSave)
+        if (saveInProgress)
         {
-            missionDataDirty = false;
+            saveAgainAfterCurrentSave = true;
+            return;
+        }
+
+
+        if (
+            firestoreManager == null ||
+            !firestoreManager.HasPlayerData ||
+            firestoreManager.CurrentPlayerData == null
+        )
+        {
+            return;
+        }
+
+
+        saveInProgress = true;
+
+        saveAgainAfterCurrentSave = false;
+
+
+        string uid =
+            firestoreManager.CurrentPlayerData.uid;
+
+
+        bool success = false;
+
+
+        try
+        {
+            success =
+                await firestoreManager
+                    .SaveMissionDataAsync();
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError(
+                $"[MissionManager] Mission save exception: {exception}"
+            );
+        }
+
+
+        saveInProgress = false;
+
+
+        bool needsAnotherSave =
+            saveAgainAfterCurrentSave;
+
+
+        saveAgainAfterCurrentSave = false;
+
+
+        if (success)
+        {
+            Debug.Log(
+                $"[MissionManager] Mission saved → UID: {uid}"
+            );
+
+
+            if (!needsAnotherSave)
+            {
+                missionDataDirty = false;
+            }
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[MissionManager] Mission save thất bại."
+            );
+        }
+
+
+        if (needsAnotherSave)
+        {
+            missionDataDirty = true;
+
+
+            Debug.Log(
+                "[MissionManager] Phát hiện thay đổi mới " +
+                "trong lúc đang save → tiếp tục save."
+            );
+
+
+            ScheduleDelayedSave();
         }
     }
-    else
-    {
-        Debug.LogWarning(
-            "[MissionManager] Mission save thất bại."
-        );
-    }
-
-
-    // =====================================================
-    // CÓ THAY ĐỔI MỚI → SAVE LẠI
-    // =====================================================
-
-    if (needsAnotherSave)
-    {
-        missionDataDirty = true;
-
-        Debug.Log(
-            "[MissionManager] Phát hiện thay đổi mới " +
-            "trong lúc đang save → tiếp tục save."
-        );
-
-        ScheduleDelayedSave();
-    }
-}
 
 
     // =========================================================
@@ -2173,7 +2403,10 @@ public class MissionManager : MonoBehaviour
 
     private void InitializeCurrentRunCounters()
     {
-        if (connectedGameManager == null)
+        if (
+            !isGameplaySceneActive ||
+            connectedGameManager == null
+        )
         {
             lastRunCoins = 0;
 
@@ -2195,6 +2428,13 @@ public class MissionManager : MonoBehaviour
                 0,
                 connectedGameManager.ScoreInt
             );
+
+
+        Debug.Log(
+            "[MissionManager] Current Run Counters → " +
+            $"Coins: {lastRunCoins} | " +
+            $"Distance: {lastRunDistance}"
+        );
     }
 
 
@@ -2205,8 +2445,25 @@ public class MissionManager : MonoBehaviour
     private void HandleCoinChanged(
         int coinCount)
     {
-        if (!accountInitialized)
+        // =====================================================
+        // HARD GAMEPLAY GUARD
+        // =====================================================
+
+        if (
+            !accountInitialized ||
+            !isGameplaySceneActive ||
+            connectedGameManager == null
+        )
+        {
             return;
+        }
+
+
+        // GameManager mới cũng phải đang active run.
+        if (!connectedGameManager.IsRunActive)
+        {
+            return;
+        }
 
 
         int currentCoins =
@@ -2251,8 +2508,24 @@ public class MissionManager : MonoBehaviour
     private void HandleScoreChanged(
         int score)
     {
-        if (!accountInitialized)
+        // =====================================================
+        // HARD GAMEPLAY GUARD
+        // =====================================================
+
+        if (
+            !accountInitialized ||
+            !isGameplaySceneActive ||
+            connectedGameManager == null
+        )
+        {
             return;
+        }
+
+
+        if (!connectedGameManager.IsRunActive)
+        {
+            return;
+        }
 
 
         int currentDistance =
@@ -2295,7 +2568,8 @@ public class MissionManager : MonoBehaviour
         }
         else
         {
-            // Score đã reset → bắt đầu run mới.
+            // Score reset trong cùng GameplayScene:
+            // bắt đầu run mới.
             lastRunDistance = 0;
         }
     }
@@ -2307,8 +2581,17 @@ public class MissionManager : MonoBehaviour
 
     private void HandleGameOver()
     {
-        if (!accountInitialized)
+        // GameOver chỉ được tính là CompleteRuns
+        // nếu GameManager đang ở Gameplay và run thực sự active.
+        if (
+            !accountInitialized ||
+            !isGameplaySceneActive ||
+            connectedGameManager == null ||
+            !connectedGameManager.IsRunActive
+        )
+        {
             return;
+        }
 
 
         dailyRuns++;
@@ -2527,7 +2810,8 @@ public class MissionManager : MonoBehaviour
         for (
             int i = 0;
             i < missions.Count;
-            i++)
+            i++
+        )
         {
             Mission mission =
                 missions[i];
@@ -2608,6 +2892,67 @@ public class MissionManager : MonoBehaviour
 
 
     // =========================================================
+    // DAILY COMPLETION
+    // =========================================================
+
+    public bool AreAllDailyMissionsClaimed
+    {
+        get
+        {
+            if (!accountInitialized)
+                return false;
+
+
+            if (
+                missions == null ||
+                missions.Count != DailyMissionCount
+            )
+            {
+                return false;
+            }
+
+
+            for (
+                int i = 0;
+                i < missions.Count;
+                i++
+            )
+            {
+                Mission mission =
+                    missions[i];
+
+
+                if (
+                    mission == null ||
+                    !mission.claimed
+                )
+                {
+                    return false;
+                }
+            }
+
+
+            return true;
+        }
+    }
+
+
+    private void CheckAllDailyMissionsClaimed()
+    {
+        if (!AreAllDailyMissionsClaimed)
+            return;
+
+
+        Debug.Log(
+            "[MissionManager] ALL DAILY MISSIONS CLAIMED."
+        );
+
+
+        OnAllDailyMissionsClaimed?.Invoke();
+    }
+
+
+    // =========================================================
     // GET MISSION
     // =========================================================
 
@@ -2621,7 +2966,8 @@ public class MissionManager : MonoBehaviour
         for (
             int i = 0;
             i < missions.Count;
-            i++)
+            i++
+        )
         {
             Mission mission =
                 missions[i];
@@ -2659,150 +3005,232 @@ public class MissionManager : MonoBehaviour
     // CLAIM MISSION
     // =========================================================
 
-   public bool ClaimMission(
-    string missionId)
-{
-    if (!accountInitialized)
+    public bool ClaimMission(
+        string missionId)
     {
-        Debug.LogWarning(
-            "[MissionManager] Account chưa được initialize."
+        if (!accountInitialized)
+        {
+            Debug.LogWarning(
+                "[MissionManager] Account chưa được initialize."
+            );
+
+            return false;
+        }
+
+
+        if (claimInProgress)
+        {
+            Debug.LogWarning(
+                "[MissionManager] Claim đang được xử lý. " +
+                "Bỏ qua request trùng."
+            );
+
+            return false;
+        }
+
+
+        Mission mission =
+            GetMission(
+                missionId
+            );
+
+
+        if (mission == null)
+        {
+            Debug.LogWarning(
+                "[MissionManager] Không tìm thấy Mission: " +
+                missionId
+            );
+
+            return false;
+        }
+
+
+        if (mission.claimed)
+        {
+            Debug.LogWarning(
+                "[MissionManager] Mission đã nhận thưởng: " +
+                mission.title
+            );
+
+            return false;
+        }
+
+
+        if (!mission.IsCompleted)
+        {
+            Debug.LogWarning(
+                "[MissionManager] Mission chưa hoàn thành: " +
+                $"{mission.title} " +
+                $"({mission.progress}/{mission.target})"
+            );
+
+            return false;
+        }
+
+
+        if (
+            firestoreManager == null ||
+            !firestoreManager.HasPlayerData ||
+            firestoreManager.CurrentPlayerData == null
+        )
+        {
+            Debug.LogError(
+                "[MissionManager] Không có PlayerData."
+            );
+
+            return false;
+        }
+
+
+        PlayerProgression progression =
+            connectedPlayerProgression;
+
+
+        if (progression == null)
+        {
+            Debug.LogError(
+                "[MissionManager] Không tìm thấy PlayerProgression."
+            );
+
+            return false;
+        }
+
+
+        claimInProgress = true;
+
+        claimMissionId = missionId;
+
+
+        ClaimMissionAsync(
+            mission,
+            progression
         );
 
-        return false;
+
+        return true;
     }
 
 
-    Mission mission =
-        GetMission(
-            missionId
-        );
-
-
-    if (mission == null)
+    private async void ClaimMissionAsync(
+        Mission mission,
+        PlayerProgression progression)
     {
-        Debug.LogWarning(
-            "[MissionManager] Không tìm thấy Mission: " +
-            missionId
-        );
+        bool rewardSuccess = false;
 
-        return false;
+
+        try
+        {
+            if (
+                mission == null ||
+                progression == null ||
+                firestoreManager == null ||
+                firestoreManager.CurrentPlayerData == null
+            )
+            {
+                return;
+            }
+
+
+            // =================================================
+            // GIVE EXP
+            // =================================================
+
+            if (mission.expReward > 0)
+            {
+                await progression.AddExpAsync(
+                    mission.expReward
+                );
+            }
+
+
+            // =================================================
+            // GIVE GOLD
+            // =================================================
+
+            if (mission.goldReward > 0)
+            {
+                bool goldSuccess =
+                    await firestoreManager.AddCoinsAsync(
+                        mission.goldReward
+                    );
+
+
+                if (!goldSuccess)
+                {
+                    Debug.LogError(
+                        "[MissionManager] Không thể lưu Gold reward."
+                    );
+
+                    return;
+                }
+            }
+
+
+            rewardSuccess = true;
+
+
+            // =================================================
+            // COMMIT CLAIMED
+            // =================================================
+
+            mission.claimed = true;
+
+
+            SyncMissionDataToPlayerData();
+
+
+            MarkMissionDataDirty(
+                true
+            );
+
+
+            OnMissionClaimed?.Invoke(
+                mission
+            );
+
+
+            CheckAllDailyMissionsClaimed();
+
+
+            if (Time.timeScale <= 0f)
+            {
+                Time.timeScale = 1f;
+            }
+
+
+            Debug.Log(
+                "[MissionManager] MISSION CLAIMED\n" +
+                $"Title: {mission.title}\n" +
+                $"Reward: +{mission.expReward} EXP | " +
+                $"+{mission.goldReward} GOLD\n" +
+                $"Claimed: {mission.claimed}"
+            );
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError(
+                "[MissionManager] Claim Mission exception: " +
+                exception
+            );
+        }
+        finally
+        {
+            if (!rewardSuccess)
+            {
+                Debug.LogWarning(
+                    "[MissionManager] Claim thất bại → " +
+                    "mission chưa commit claimed: " +
+                    $"{mission?.title}"
+                );
+            }
+
+
+            claimInProgress = false;
+
+            claimMissionId = null;
+        }
     }
-
-
-    if (mission.claimed)
-    {
-        Debug.LogWarning(
-            "[MissionManager] Mission đã nhận thưởng: " +
-            mission.title
-        );
-
-        return false;
-    }
-
-
-    if (!mission.IsCompleted)
-    {
-        Debug.LogWarning(
-            "[MissionManager] Mission chưa hoàn thành: " +
-            $"{mission.title} " +
-            $"({mission.progress}/{mission.target})"
-        );
-
-        return false;
-    }
-
-
-    PlayerProgression progression =
-        connectedPlayerProgression;
-
-
-    if (progression == null)
-    {
-        Debug.LogError(
-            "[MissionManager] Không tìm thấy PlayerProgression."
-        );
-
-        return false;
-    }
-
-
-    // =====================================================
-    // 1. MARK CLAIMED NGAY LẬP TỨC
-    // =====================================================
-
-    mission.claimed = true;
-
-
-    // =====================================================
-    // 2. ĐỒNG BỘ CLAIMED VÀO PLAYER DATA
-    // =====================================================
-
-    SyncMissionDataToPlayerData();
-
-
-    // =====================================================
-    // 3. GIVE EXP
-    // =====================================================
-
-    if (mission.expReward > 0)
-    {
-        progression.AddExp(
-            mission.expReward
-        );
-    }
-
-
-    // =====================================================
-    // 4. ĐỒNG BỘ LẠI SAU KHI GIVE EXP
-    // =====================================================
-
-    SyncMissionDataToPlayerData();
-
-
-    // =====================================================
-    // 5. ĐÁNH DẤU DIRTY + SAVE
-    // =====================================================
-
-    MarkMissionDataDirty(
-        true
-    );
-
-
-    // =====================================================
-    // 6. EVENT UI
-    // =====================================================
-
-    OnMissionClaimed?.Invoke(
-        mission
-    );
-
-
-    // =====================================================
-    // 7. RESTORE TIME SCALE
-    // =====================================================
-
-    if (Time.timeScale <= 0f)
-    {
-        Time.timeScale = 1f;
-
-
-        Debug.Log(
-            "[MissionManager] Claim Mission → " +
-            "Time.timeScale = 1."
-        );
-    }
-
-
-    Debug.Log(
-        "[MissionManager] MISSION CLAIMED\n" +
-        $"Title: {mission.title}\n" +
-        $"Reward: +{mission.expReward} EXP\n" +
-        $"Claimed: {mission.claimed}"
-    );
-
-
-    return true;
-}
 
 
     // =========================================================
@@ -2819,7 +3247,8 @@ public class MissionManager : MonoBehaviour
         for (
             int i = 0;
             i < missions.Count;
-            i++)
+            i++
+        )
         {
             Mission mission =
                 missions[i];
@@ -2836,6 +3265,7 @@ public class MissionManager : MonoBehaviour
                 $"Progress: {mission.progress}/" +
                 $"{mission.target} | " +
                 $"Reward: +{mission.expReward} EXP | " +
+                $"+{mission.goldReward} GOLD | " +
                 $"Claimed: {mission.claimed}"
             );
         }

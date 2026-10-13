@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_008_Lead_08
+  m_EditorClassIdentifier: 
+  itemId: 8
+  itemName: "Lead Cyber Vi\u1EC7t"
+  description: "Lead phong c\xE1ch t\u01B0\u01A1ng lai v\u1EDBi neon, \xE1nh s\xE1ng
+    \u0111i\u1EC7n t\u1EED v\xE0 thi\u1EBFt k\u1EBF cyberpunk."
+  category: 0
+  subCategory: "\u0110\u1EB7c Bi\u1EC7t"
+  rarity: 2
+  icon: {fileID: 0}
+  prefab: {fileID: 6326726421732722259, guid: 92a125dcbb19394408c6721576ab6637, type: 3}
+  visualId: VISUAL_ITEM_008
+  purchasable: 1
+  price: 1500
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 2
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 8
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 8
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 2, Acceleration: 8, Handling: 8'
+  passiveDescription: Lead 08 - Vehicle Uncommon

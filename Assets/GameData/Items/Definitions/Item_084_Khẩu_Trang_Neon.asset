@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: "Item_084_Kh\u1EA9u_Trang_Neon"
+  m_EditorClassIdentifier: 
+  itemId: 84
+  itemName: "Ph\u1EE5 Ki\u1EC7n 04"
+  description: "Ph\u1EE5 Ki\u1EC7n 04 - Accessory Common"
+  category: 2
+  subCategory: "Ph\u1EE5 Ki\u1EC7n"
+  rarity: 0
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_084
+  purchasable: 1
+  price: 100
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 1
+      isPercent: 0
+      condition: 
+    - statKey: Handling
+      value: 5
+      isPercent: 1
+      condition: 
+    - statKey: ShieldDuration
+      value: 0.5
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'MaxSpeed: 1, Handling: 5, ShieldDuration: 0.5'
+  passiveDescription: "Ph\u1EE5 Ki\u1EC7n 04 - Accessory Common"

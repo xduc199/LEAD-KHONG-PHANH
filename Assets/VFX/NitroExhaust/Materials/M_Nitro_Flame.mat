@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: M_Nitro_Flame
+  m_Shader: {fileID: 4800000, guid: 470d8262e92fa22448ad44b04e11476e, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 3100
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 8b34592a51063cd408fb8abd28e8e172, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _CoreBoost: 0.85
+    - _Cull: 0
+    - _Curvature: 0
+    - _Distort: 0.13
+    - _Erosion: 0.44
+    - _Exposure: 1.35
+    - _Flicker: 0.5
+    - _Intensity: 1
+    - _NoiseScale: 3.2
+    - _ScrollSpeed: 4.6
+    - _Seed: 0
+    - _SoftEdge: 0.35
+    - _TipFade: 1.5
+    - _Trimming: 0
+    - _WobbleAmp: 0.11
+    - _WobbleFreq: 5.5
+    - _WobbleSpeed: 8
+    m_Colors:
+    - _ColorCore: {r: 2.2, g: 2.09, b: 1.716, a: 2.2}
+    - _ColorMid: {r: 1.9, g: 1.2540001, b: 0.304, a: 1.9}
+    - _ColorOuter: {r: 1.5, g: 0.22500001, b: 0.03, a: 1.5}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

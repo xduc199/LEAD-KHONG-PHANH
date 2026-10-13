@@ -379,9 +379,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 359864c15df64c94faee4c3a5a53bef2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  leftLaneX: -6
+  leftLaneX: -7
   centerLaneX: 0
-  rightLaneX: 6
+  rightLaneX: 7
   laneIndex: 1
   laneChangeProbability: 0.85
   laneChangeDuration: 1.2

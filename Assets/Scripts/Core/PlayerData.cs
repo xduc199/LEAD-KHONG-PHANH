@@ -26,6 +26,7 @@ public class MissionSaveData
     }
 }
 
+
 [Serializable]
 public class PlayerData
 {
@@ -46,49 +47,114 @@ public class PlayerData
 
 
     // =========================================================
+    // RUN STATISTICS
+    // =========================================================
+
+    public int totalRuns;
+
+
+    // =========================================================
     // ECONOMY
     // =========================================================
 
     public int coins;
+    public int gems;
     public int bestScore;
 
 
     // =========================================================
-    // BIKE
+    // LEGACY BIKE
     // =========================================================
 
+    /// <summary>
+    /// Legacy vehicle identifier.
+    ///
+    /// Giữ lại để tương thích hệ thống cũ.
+    /// Hệ thống Equipment mới sử dụng equippedVehicleItemId.
+    /// </summary>
     public string selectedBike;
 
+
+    /// <summary>
+    /// Legacy danh sách bike.
+    ///
+    /// Giữ lại để tương thích dữ liệu account cũ.
+    /// Không dùng làm nguồn dữ liệu chính cho Inventory mới.
+    /// </summary>
     public List<string> ownedBikes =
         new List<string>();
+
+
+    // =========================================================
+    // ITEM OWNERSHIP
+    // =========================================================
+
+    /// <summary>
+    /// Danh sách Item ID mà player sở hữu.
+    ///
+    /// Category của Item KHÔNG được suy luận
+    /// từ khoảng ID.
+    ///
+    /// Category phải được lấy từ GameItemDatabase.
+    ///
+    /// Player mới mặc định sở hữu Item ID 1.
+    ///
+    /// Không lưu duplicate Item ID.
+    /// </summary>
+    public List<int> ownedItemIds =
+        new List<int>();
+
+
+    // =========================================================
+    // EQUIPMENT
+    // =========================================================
+
+    /// <summary>
+    /// Vehicle hiện tại đang trang bị.
+    ///
+    /// Default = 1
+    ///
+    /// 0 = chưa trang bị.
+    /// </summary>
+    public int equippedVehicleItemId;
+
+
+    /// <summary>
+    /// Outfit hiện tại đang trang bị.
+    ///
+    /// Default = 1
+    ///
+    /// 0 = chưa trang bị.
+    /// </summary>
+    public int equippedOutfitItemId;
+
+
+    /// <summary>
+    /// Accessory hiện tại đang trang bị.
+    ///
+    /// Default = 0.
+    /// </summary>
+    public int equippedAccessoryItemId;
+
+
+    /// <summary>
+    /// Cosmetic hiện tại đang trang bị.
+    ///
+    /// Default = 0.
+    /// </summary>
+    public int equippedCosmeticItemId;
 
 
     // =========================================================
     // ITEM UPGRADES
     // =========================================================
 
-    /// <summary>
-    /// Level nâng cấp Gum.
-    /// Mặc định Level 1.
-    /// </summary>
     public int gumUpgradeLevel;
 
-    /// <summary>
-    /// Level nâng cấp Photon.
-    /// Mặc định Level 1.
-    /// </summary>
     public int photonUpgradeLevel;
 
-    /// <summary>
-    /// Level nâng cấp Shield.
-    /// Mặc định Level 1.
-    /// </summary>
     public int shieldUpgradeLevel;
 
-    /// <summary>
-    /// Level nâng cấp Magnet.
-    /// Mặc định Level 1.
-    /// </summary>
     public int magnetUpgradeLevel;
 
 
@@ -96,56 +162,21 @@ public class PlayerData
     // DAILY MISSIONS
     // =========================================================
 
-    /// <summary>
-    /// Ngày của Daily Mission hiện tại.
-    /// Format: yyyyMMdd
-    /// </summary>
     public string missionDate;
 
-
-    /// <summary>
-    /// Danh sách ID template được chọn trong ngày.
-    /// Ví dụ:
-    /// coin_30, distance_1000, runs_3
-    /// </summary>
     public List<string> missionSelection =
         new List<string>();
 
-
-    /// <summary>
-    /// Tổng coin dùng cho Daily Mission trong ngày.
-    /// </summary>
     public int missionDailyCoins;
 
-
-    /// <summary>
-    /// Tổng distance dùng cho Daily Mission trong ngày.
-    /// </summary>
     public int missionDailyDistance;
 
-
-    /// <summary>
-    /// Tổng số run hoàn thành trong ngày.
-    /// </summary>
     public int missionDailyRuns;
 
-
-    /// <summary>
-    /// Tổng EXP kiếm được trong ngày.
-    /// </summary>
     public int missionDailyExp;
 
-
-    /// <summary>
-    /// Total EXP cuối cùng MissionManager đã biết.
-    /// Dùng để tính delta EXP.
-    /// </summary>
     public int missionPreviousTotalExp;
 
-
-    /// <summary>
-    /// Progress + claimed của từng Daily Mission.
-    /// </summary>
     public List<MissionSaveData> missionStates =
         new List<MissionSaveData>();
 
@@ -157,11 +188,28 @@ public class PlayerData
     public PlayerData()
     {
         // -----------------------------------------------------
+        // ACCOUNT
+        // -----------------------------------------------------
+
+        uid = string.Empty;
+
+        displayName = string.Empty;
+
+
+        // -----------------------------------------------------
         // PROGRESSION
         // -----------------------------------------------------
 
         level = 1;
+
         exp = 0;
+
+
+        // -----------------------------------------------------
+        // RUN STATISTICS
+        // -----------------------------------------------------
+
+        totalRuns = 0;
 
 
         // -----------------------------------------------------
@@ -169,11 +217,14 @@ public class PlayerData
         // -----------------------------------------------------
 
         coins = 0;
+
+        gems = 0;
+
         bestScore = 0;
 
 
         // -----------------------------------------------------
-        // BIKE
+        // LEGACY BIKE
         // -----------------------------------------------------
 
         selectedBike = "NinjaLead";
@@ -182,6 +233,43 @@ public class PlayerData
         {
             "NinjaLead"
         };
+
+
+        // -----------------------------------------------------
+        // ITEM OWNERSHIP
+        // -----------------------------------------------------
+
+        // Player mới mặc định sở hữu Item ID 1.
+        //
+        // Không thêm duplicate.
+        // Không dùng ID range để xác định Category.
+        //
+        // Category được xác định bởi GameItemDatabase.
+
+        ownedItemIds = new List<int>
+        {
+            1
+        };
+
+
+        // -----------------------------------------------------
+        // EQUIPMENT
+        // -----------------------------------------------------
+
+        // Default Vehicle
+        equippedVehicleItemId = 1;
+
+
+        // Default Outfit
+        equippedOutfitItemId = 1;
+
+
+        // Không có Accessory mặc định.
+        equippedAccessoryItemId = 0;
+
+
+        // Không có Cosmetic mặc định.
+        equippedCosmeticItemId = 0;
 
 
         // -----------------------------------------------------
@@ -198,13 +286,12 @@ public class PlayerData
 
 
         // -----------------------------------------------------
-        // MISSIONS
+        // DAILY MISSIONS
         // -----------------------------------------------------
 
         missionDate = string.Empty;
 
-        missionSelection =
-            new List<string>();
+        missionSelection = new List<string>();
 
         missionDailyCoins = 0;
 
@@ -214,11 +301,8 @@ public class PlayerData
 
         missionDailyExp = 0;
 
-        // Giá trị 0 vẫn tương thích với dữ liệu cũ.
-        // MissionManager sẽ tự đồng bộ lại khi load account.
         missionPreviousTotalExp = 0;
 
-        missionStates =
-            new List<MissionSaveData>();
+        missionStates = new List<MissionSaveData>();
     }
 }

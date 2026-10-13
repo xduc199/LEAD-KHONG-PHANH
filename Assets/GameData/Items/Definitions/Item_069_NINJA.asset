@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_069_NINJA
+  m_EditorClassIdentifier: 
+  itemId: 69
+  itemName: "M\u1EF9 Ph\u1EA9m 09"
+  description: "M\u1EF9 Ph\u1EA9m 09 - Cosmetic Uncommon"
+  category: 3
+  subCategory: "M\u1EF9 Ph\u1EA9m"
+  rarity: 1
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_069
+  purchasable: 1
+  price: 250
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: Handling
+      value: 8
+      isPercent: 1
+      condition: 
+    - statKey: MagnetRange
+      value: 1
+      isPercent: 0
+      condition: 
+    - statKey: ShieldDuration
+      value: 1
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'Handling: 8, MagnetRange: 1, ShieldDuration: 1'
+  passiveDescription: "M\u1EF9 Ph\u1EA9m 09 - Cosmetic Uncommon"

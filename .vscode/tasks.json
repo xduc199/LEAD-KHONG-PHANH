@@ -1,0 +1,1246 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Phase 4C launcher tests",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Test Phase 4C launcher",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Test Phase 4C end-to-end",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Diagnose trial fixture test",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"--configuration",
+				"Release",
+				"--filter",
+				"FullyQualifiedName~EndToEnd_PreparedTrialConfirmsHealthAndCommitsAtomically"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Temporary sanitized Firebase identity audit",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"Tools\\FirebaseConfigAudit\\FirebaseConfigAudit.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+		{
+			"label": "Check Unity Editor process",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Phase 5A1 launcher regression tests",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Phase 5A1 updater regression tests",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadUpdater.Tests\\LeadUpdater.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Confirm Unity Editor closed",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait for Unity Editor to close",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"24992",
+				"-Timeout",
+				"600"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity is closed 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect Unity process state 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"-Id",
+				"34768",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect Unity Editor health state",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"-Id",
+				"34768",
+				"|",
+				"Select-Object",
+				"Id,ProcessName,Responding,Path,StartTime,CPU,Handles"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect Unity process executable",
+			"type": "shell",
+			"command": "Get-CimInstance",
+			"args": [
+				"Win32_Process",
+				"-Filter",
+				"ProcessId=34768",
+				"|",
+				"Select-Object",
+				"ProcessId,ExecutablePath,CreationDate,ParentProcessId"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity closed for Phase 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Unity EditMode compile and tests Phase 5A1",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-quit",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-runTests",
+				"-testPlatform",
+				"EditMode",
+				"-testResults",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode.xml",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Check Unity after EditMode run 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect Unity batch process 5A1",
+			"type": "shell",
+			"command": "Get-CimInstance",
+			"args": [
+				"Win32_Process",
+				"-Filter",
+				"ProcessId=18100",
+				"|",
+				"Select-Object",
+				"ProcessId,ExecutablePath,CommandLine,CreationDate,ParentProcessId"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait Unity batch test completion 5A1",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"18100",
+				"-Timeout",
+				"600"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity batch ended 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Unity EditMode tests without early quit",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-runTests",
+				"-testPlatform",
+				"EditMode",
+				"-testResults",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode.xml",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode-Retry.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Inspect Unity test runner 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue",
+				"|",
+				"Select-Object",
+				"Id,Responding,StartTime,CPU,Handles"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait for Unity EditMode Runner",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"14048",
+				"-Timeout",
+				"600"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build actual Unity Windows x64 Release",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-executeMethod",
+				"Phase5A1ReleaseBuild.BuildWindows64",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64-Build.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Inspect Unity Release build 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue",
+				"|",
+				"Select-Object",
+				"Id,Responding,StartTime,CPU,Handles"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait Unity Windows Release build",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"4136",
+				"-Timeout",
+				"900"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity build exited 5A1",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Rerun Unity EditMode tests after fixes",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-runTests",
+				"-testPlatform",
+				"EditMode",
+				"-testResults",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode-Final.xml",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Unity-EditMode-Final.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Wait Unity EditMode final tests",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"(Get-Process Unity).Id",
+				"-Timeout",
+				"600"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity final test runner",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue",
+				"|",
+				"Select-Object",
+				"Id,Responding,CPU"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Rebuild Unity Windows x64 Release after fixes",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-executeMethod",
+				"Phase5A1ReleaseBuild.BuildWindows64",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64-Build-Final.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Wait Unity Release build completion",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue",
+				"|",
+				"Select-Object",
+				"Id"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait for Release build result 5A1",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"12412",
+				"-Timeout",
+				"1200"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect Unity build completion markers",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"findstr /n /i \"PHASE5A1_BUILD_RESULT Build completed Build succeeded Build failed BuildFailedException error CS\" C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64-Build-Final.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity process and build marker",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"findstr /n /i /c:PHASE5A1_BUILD_RESULT /c:BuildFailedException /c:BuildReport /c:Error\\ building\\ Player /c:Build\\ completed C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64-Build-Final.log & tasklist /FI \"IMAGENAME eq Unity.exe\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity editor process status",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Read final build log lines",
+			"type": "shell",
+			"command": "Get-Content",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64-Build-Final.log",
+				"-Tail",
+				"50"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check build output timestamp",
+			"type": "shell",
+			"command": "Get-Item",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64\\LEADKhongPhanh.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Stop completed Unity build process",
+			"type": "shell",
+			"command": "Stop-Process",
+			"args": [
+				"-Id",
+				"12412"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check scoped Git status",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short",
+				"--",
+				"Assets/Scripts/Update/UpdateHealthReporter.cs",
+				"Assets/Scripts/Update/UpdateManager.cs",
+				"Assets/Editor/Phase5A1ReleaseBuild.cs",
+				"Assets/Editor/Phase5A1ReleaseBuild.cs.meta"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check current Unity player processes",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe",
+				"/FI",
+				"IMAGENAME eq LEADKhongPhanh.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check existing Build A payload",
+			"type": "shell",
+			"command": "Get-Item",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A1-Win64\\LEADKhongPhanh.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run launcher regression suite",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"-c",
+				"Release",
+				"--no-restore"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run updater regression suite",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadUpdater.Tests\\LeadUpdater.Tests.csproj",
+				"-c",
+				"Release",
+				"--no-restore"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build read-only Firebase validation players A and B",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-executeMethod",
+				"Phase5A2Build.BuildRuntimeTestPlayers",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2-Build.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity validation build process",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check temporary test artifacts",
+			"type": "shell",
+			"command": "Get-ChildItem",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2",
+				"-Force",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Read validation build log tail",
+			"type": "shell",
+			"command": "Get-Content",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2-Build.log",
+				"-Tail",
+				"100"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check validation build artifacts",
+			"type": "shell",
+			"command": "Get-ChildItem",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp",
+				"-Filter",
+				"Phase5A2*",
+				"-Force"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity build failure process",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"Unity",
+				"-ErrorAction",
+				"SilentlyContinue",
+				"|",
+				"Select-Object",
+				"Id",
+				"Path"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Rebuild Firebase runtime test players",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-executeMethod",
+				"Phase5A2Build.BuildRuntimeTestPlayers",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2-Build-Retry.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity A B build process",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait Unity validation builds completion",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"18096",
+				"-Timeout",
+				"900"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Build A artifacts",
+			"type": "shell",
+			"command": "Get-ChildItem",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildA",
+				"-Force",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity process after build",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait Firebase validation build",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"18096",
+				"-Timeout",
+				"900"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Close completed Unity batch editor",
+			"type": "shell",
+			"command": "Stop-Process",
+			"args": [
+				"-Id",
+				"18096"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Unity EditMode regression tests",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-runTests",
+				"-testPlatform",
+				"EditMode",
+				"-testResults",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2-Unity-EditMode.xml",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2-Unity-EditMode.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity test runner status",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Package Firebase validation Build B candidate",
+			"type": "shell",
+			"command": "tar.exe",
+			"args": [
+				"-a",
+				"-c",
+				"-f",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\LEAD-KHONG-PHANH-v0.2.0-candidate.zip",
+				"-C",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildB",
+				"."
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity test completion process",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check candidate archive",
+			"type": "shell",
+			"command": "Get-Item",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\LEAD-KHONG-PHANH-v0.2.0-candidate.zip"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check temporary validation scene cleanup",
+			"type": "shell",
+			"command": "Test-Path",
+			"args": [
+				"Assets\\Scenes\\Phase5A2FirebaseValidation.unity"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Launch Build A Firebase validation player",
+			"type": "shell",
+			"command": "Start-Process",
+			"args": [
+				"-FilePath",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildA\\LEADKhongPhanh.exe",
+				"-ArgumentList",
+				"--phase5a2-build A"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Build A player process",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq LEADKhongPhanh.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check runtime log sensitive patterns",
+			"type": "shell",
+			"command": "$t=Get-Content -Raw 'C:\\Users\\Admin\\AppData\\LocalLow\\DefaultCompany\\leadkhongphanhdemo\\Player.log'; [pscustomobject]@{ PasswordOrTokenMarkers=([regex]::Matches($t,'(?i)(password\\s*[=:]|access_token|refresh_token|id_token)').Count); FirebaseApiKeyMarkers=([regex]::Matches($t,'AIza[0-9A-Za-z_-]{20,}').Count); CredentialObjectMarkers=([regex]::Matches($t,'(?i)credential\\s*[=:]').Count) }",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify candidate ZIP entries",
+			"type": "shell",
+			"command": "tar.exe -tf \"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\LEAD-KHONG-PHANH-v0.2.0-candidate.zip\" | Select-String -Pattern \"LEADKhongPhanh.exe|UnityPlayer.dll|google-services-desktop.json|FirebaseCpp(App|Auth|Firestore)\"",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify no temporary repo files remain",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short",
+				"--",
+				"Assets/Scripts/Update/Phase5A2FirebaseValidationProbe.cs",
+				"Assets/Scripts/Update/Phase5A2FirebaseValidationProbe.cs.meta",
+				"Assets/Editor/Phase5A2Build.cs",
+				"Assets/Editor/Phase5A2Build.cs.meta",
+				"Assets/Scenes/Phase5A2FirebaseValidation.unity",
+				"Assets/Scenes/Phase5A2FirebaseValidation.unity.meta",
+				"ProjectSettings/ProjectSettings.asset"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect PlayerSettings working diff",
+			"type": "shell",
+			"command": "git diff --",
+			"args": [
+				"ProjectSettings/ProjectSettings.asset"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Recheck candidate archive files",
+			"type": "shell",
+			"command": "tar.exe -tf \"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\LEAD-KHONG-PHANH-v0.2.0-candidate.zip\" | Select-String -SimpleMatch -Pattern 'LEADKhongPhanh.exe','UnityPlayer.dll','google-services-desktop.json','FirebaseCppApp-','FirebaseCppAuth','FirebaseCppFirestore'",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect working ProjectSettings diff",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--",
+				"ProjectSettings/ProjectSettings.asset"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify ProjectSettings restored",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--",
+				"ProjectSettings/ProjectSettings.asset"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Count Build B sensitive paths",
+			"type": "shell",
+			"command": "$n=Get-ChildItem -LiteralPath 'C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildB' -Recurse -File | Where-Object { $_.Name -match 'token|credential|playerdata|firestorecache|authstate|password|playerprefs' }; 'SuspiciousFileCount='+$n.Count",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Identify candidate suspicious filename",
+			"type": "shell",
+			"command": "Get-ChildItem -LiteralPath 'C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildB' -Recurse -File | Where-Object { $_.Name -match 'token|credential|playerdata|firestorecache|authstate|password|playerprefs' } | Select-Object -ExpandProperty FullName",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Relaunch Build A for existing test document",
+			"type": "shell",
+			"command": "Start-Process",
+			"args": [
+				"-FilePath",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildA\\LEADKhongPhanh.exe",
+				"-ArgumentList",
+				"--phase5a2-build A"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Build A validation process",
+			"type": "shell",
+			"command": "Get-Process",
+			"args": [
+				"LEADKhongPhanh",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Launch Build B for UID and data retention",
+			"type": "shell",
+			"command": "Start-Process",
+			"args": [
+				"-FilePath",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5A2\\BuildB\\LEADKhongPhanh.exe",
+				"-ArgumentList",
+				"--phase5a2-build B"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Confirm Build B player stopped",
+			"type": "shell",
+			"command": "Get-Process -Name LEADKhongPhanh -ErrorAction SilentlyContinue | Select-Object Id,Path",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Confirm ProjectSettings diff empty",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--",
+				"ProjectSettings/ProjectSettings.asset"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Close finished Build B player",
+			"type": "shell",
+			"command": "Stop-Process",
+			"args": [
+				"-Id",
+				"11328"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Final Firebase log leak scan",
+			"type": "shell",
+			"command": "$t=Get-Content -Raw 'C:\\Users\\Admin\\AppData\\LocalLow\\DefaultCompany\\leadkhongphanhdemo\\Player.log'; [pscustomobject]@{ PasswordOrTokenMarkers=([regex]::Matches($t,'(?i)(password\\s*[=:]|access_token|refresh_token|id_token)').Count); FirebaseApiKeyMarkers=([regex]::Matches($t,'AIza[0-9A-Za-z_-]{20,}').Count); CredentialObjectMarkers=([regex]::Matches($t,'(?i)credential\\s*[=:]').Count); RawUidLabelMarkers=([regex]::Matches($t,'(?i)(uid\\s*=|uid:)').Count) }",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect release output directory",
+			"type": "shell",
+			"command": "$p='Builds\\0.2.0'; if (Test-Path -LiteralPath $p) { Get-ChildItem -LiteralPath $p -Force | Select-Object Mode,Name,Length,LastWriteTime } else { 'NOT_PRESENT' }",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build clean Unity 0.2.0 production release",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-executeMethod",
+				"Phase5BReleaseBuild.BuildWindows64Release",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5B-Unity-Build.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run launcher regression suite phase 5B",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadLauncher.Tests\\LeadLauncher.Tests.csproj",
+				"-c",
+				"Release",
+				"--no-restore"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity production build status",
+			"type": "shell",
+			"command": "tasklist.exe",
+			"args": [
+				"/FI",
+				"IMAGENAME eq Unity.exe"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run updater regression suite phase 5B",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"Tools\\LeadUpdater.Tests\\LeadUpdater.Tests.csproj",
+				"-c",
+				"Release",
+				"--no-restore"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check release output while building",
+			"type": "shell",
+			"command": "Get-ChildItem",
+			"args": [
+				"Builds\\0.2.0",
+				"-Recurse",
+				"-File",
+				"-ErrorAction",
+				"SilentlyContinue"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Wait Unity production build editor exit",
+			"type": "shell",
+			"command": "Wait-Process",
+			"args": [
+				"-Id",
+				"17200",
+				"-Timeout",
+				"60"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Close Unity after completed release build",
+			"type": "shell",
+			"command": "Stop-Process",
+			"args": [
+				"-Id",
+				"17200"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Unity EditMode regression phase 5B",
+			"type": "shell",
+			"command": "D:\\app\\6000.0.82f1\\Editor\\Unity.exe",
+			"args": [
+				"-batchmode",
+				"-nographics",
+				"-projectPath",
+				"D:\\Study\\ĐỒ ÁN\\laptrinhgame\\LEAD-KHONG-PHANH",
+				"-runTests",
+				"-testPlatform",
+				"EditMode",
+				"-testResults",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5B-Unity-EditMode.xml",
+				"-logFile",
+				"C:\\Users\\Admin\\AppData\\Local\\Temp\\Phase5B-Unity-EditMode.log"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect runtime and non-runtime release files",
+			"type": "shell",
+			"command": "Get-ChildItem -LiteralPath 'Builds\\0.2.0\\Game' -Force | Select-Object Mode,Name,Length; Get-ChildItem -LiteralPath 'Builds\\0.2.0\\Game\\leadkhongphanhdemo_BurstDebugInformation_DoNotShip' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 10 Name,Length",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect production scene test references",
+			"type": "shell",
+			"command": "Select-String -Path 'ProjectSettings\\EditorBuildSettings.asset' -Pattern 'Test|Probe|Validation'",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check Unity regression runner process",
+			"type": "shell",
+			"command": "Get-Process -Name Unity -ErrorAction SilentlyContinue | Select-Object Id,CPU,WorkingSet64",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify release version restored",
+			"type": "shell",
+			"command": "Select-String",
+			"args": [
+				"-Path",
+				"ProjectSettings\\ProjectSettings.asset",
+				"-Pattern",
+				"bundleVersion:",
+				"companyName:",
+				"productName:"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check EditMode test results files",
+			"type": "shell",
+			"command": "Get-ChildItem",
+			"args": [
+				"C:\\Users\\Admin\\AppData\\Local\\Temp",
+				"-Filter",
+				"*Phase5B*xml",
+				"-Force"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Read release version identity",
+			"type": "shell",
+			"command": "Select-String",
+			"args": [
+				"-Path",
+				"ProjectSettings\\ProjectSettings.asset",
+				"-Pattern",
+				"bundleVersion: 0.1.0",
+				"-SimpleMatch"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

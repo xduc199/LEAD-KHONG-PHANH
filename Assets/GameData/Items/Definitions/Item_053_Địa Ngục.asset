@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: "Item_053_\u0110\u1ECBa Ng\u1EE5c"
+  m_EditorClassIdentifier: 
+  itemId: 53
+  itemName: "Trang Ph\u1EE5c 13"
+  description: "Trang Ph\u1EE5c 13 - Outfit Uncommon"
+  category: 1
+  subCategory: "Trang Ph\u1EE5c"
+  rarity: 3
+  icon: {fileID: 0}
+  prefab: {fileID: 4019007718533395793, guid: c020a6cdd594c5241949a3d985dca5e0, type: 3}
+  visualId: VISUAL_ITEM_053
+  purchasable: 1
+  price: 2500
+  currency: 1
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: Acceleration
+      value: 8
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 8
+      isPercent: 1
+      condition: 
+    - statKey: JumpForce
+      value: 1
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'Acceleration: 8, Handling: 8, JumpForce: 1'
+  passiveDescription: "Trang Ph\u1EE5c 13 - Outfit Uncommon"

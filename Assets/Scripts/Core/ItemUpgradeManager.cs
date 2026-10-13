@@ -1,9 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
-public class ItemUpgradeManager : MonoBehaviour
+[DisallowMultipleComponent]
+[DefaultExecutionOrder(-100)]
+public sealed class ItemUpgradeManager : MonoBehaviour
 {
     // =========================================================
     // SINGLETON
@@ -13,10 +14,11 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
     // =========================================================
-    // DATA
+    // UPGRADE DATA
     // =========================================================
 
     [Header("Upgrade Data")]
+
     [SerializeField]
     private ItemUpgradeData gumData;
 
@@ -31,7 +33,7 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
     // =========================================================
-    // REFERENCES
+    // FIRESTORE
     // =========================================================
 
     private FirestorePlayerDataManager firestoreManager;
@@ -43,27 +45,118 @@ public class ItemUpgradeManager : MonoBehaviour
 
     private bool initialized;
 
+    private bool playerDataReady;
+
+    private bool upgradeOperationRunning;
+
+
+    // =========================================================
+    // PUBLIC STATE
+    // =========================================================
+
+    /// <summary>
+    /// ItemUpgradeManager đã kết nối Firestore.
+    /// </summary>
+    public bool IsInitialized
+    {
+        get
+        {
+            return initialized;
+        }
+    }
+
+
+    /// <summary>
+    /// PlayerData đã load hoàn chỉnh và có thể đọc upgrade.
+    ///
+    /// Đây là cờ quan trọng:
+    ///
+    /// false = KHÔNG được coi là Level 1.
+    /// true  = CurrentPlayerData hợp lệ.
+    /// </summary>
+    public bool IsPlayerDataReady
+    {
+        get
+        {
+            return playerDataReady;
+        }
+    }
+
+
+    /// <summary>
+    /// Có upgrade transaction đang chạy hay không.
+    /// </summary>
+    public bool IsUpgradeOperationRunning
+    {
+        get
+        {
+            return upgradeOperationRunning;
+        }
+    }
+
 
     // =========================================================
     // EVENTS
     // =========================================================
 
-    public event Action<UpgradeItemType, int> OnUpgradeLevelChanged;
+    /// <summary>
+    /// itemType, currentLevel
+    /// </summary>
+    public event Action<UpgradeItemType, int>
+        OnUpgradeLevelChanged;
 
-    public event Action<int> OnCoinsChanged;
 
-    public event Action<UpgradeItemType, int, int> OnUpgradeSucceeded;
+    /// <summary>
+    /// coins
+    /// </summary>
+    public event Action<int>
+        OnCoinsChanged;
 
-    public event Action<UpgradeItemType, string> OnUpgradeFailed;
+
+    /// <summary>
+    /// itemType, oldLevel, newLevel
+    ///
+    /// IMPORTANT:
+    /// Event này trước đây bị truyền:
+    /// (itemType, newLevel, upgradeCost)
+    ///
+    /// Đã sửa semantic.
+    /// </summary>
+    public event Action<UpgradeItemType, int, int>
+        OnUpgradeSucceeded;
+
+
+    /// <summary>
+    /// itemType, reason
+    /// </summary>
+    public event Action<UpgradeItemType, string>
+        OnUpgradeFailed;
+
+
+    /// <summary>
+    /// PlayerData vừa ready.
+    ///
+    /// Controller có thể subscribe để refresh runtime.
+    /// </summary>
+    public event Action
+        OnPlayerUpgradeDataReady;
+
+
+    /// <summary>
+    /// PlayerData đã bị clear/logout.
+    /// </summary>
+    public event Action
+        OnPlayerUpgradeDataCleared;
 
 
     // =========================================================
-    // UNITY
+    // UNITY - AWAKE
     // =========================================================
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        if (Instance != null &&
+            Instance != this)
         {
             Destroy(gameObject);
             return;
@@ -71,9 +164,40 @@ public class ItemUpgradeManager : MonoBehaviour
 
         Instance = this;
 
+
+        // =====================================================
+        // FIX:
+        // DontDestroyOnLoad chỉ hoạt động trên ROOT object.
+        //
+        // Project của bạn trước đây có warning:
+        // "DontDestroyOnLoad only works for root GameObjects"
+        //
+        // Nếu ItemUpgradeManager nằm dưới một parent,
+        // detach nó trước khi DontDestroyOnLoad.
+        // =====================================================
+
+        if (transform.parent != null)
+        {
+            transform.SetParent(
+                null,
+                true
+            );
+        }
+
         DontDestroyOnLoad(gameObject);
+
+
+        // =====================================================
+        // FIRESTORE MANAGER MAY ALREADY EXIST
+        // =====================================================
+
+        TryInitialize();
     }
 
+
+    // =========================================================
+    // UNITY - START
+    // =========================================================
 
     private void Start()
     {
@@ -81,8 +205,46 @@ public class ItemUpgradeManager : MonoBehaviour
     }
 
 
+    // =========================================================
+    // ENABLE
+    // =========================================================
+
+    private void OnEnable()
+    {
+        FirestorePlayerDataManager.OnManagerReady +=
+            HandleFirestoreManagerReady;
+
+        TryInitialize();
+    }
+
+
+    // =========================================================
+    // DISABLE
+    // =========================================================
+
+    private void OnDisable()
+    {
+        FirestorePlayerDataManager.OnManagerReady -=
+            HandleFirestoreManagerReady;
+
+        UnbindFirestoreEvents();
+    }
+
+
+    // =========================================================
+    // DESTROY
+    // =========================================================
+
     private void OnDestroy()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        FirestorePlayerDataManager.OnManagerReady -=
+            HandleFirestoreManagerReady;
+
         UnbindFirestoreEvents();
     }
 
@@ -93,33 +255,91 @@ public class ItemUpgradeManager : MonoBehaviour
 
     private void TryInitialize()
     {
-        if (initialized)
-            return;
+        // -----------------------------------------------------
+        // FIND FIRESTORE MANAGER
+        // -----------------------------------------------------
 
-        firestoreManager =
-            FirestorePlayerDataManager.Instance;
+        if (firestoreManager == null)
+        {
+            firestoreManager =
+                FirestorePlayerDataManager.Instance;
+        }
+
+
+        // -----------------------------------------------------
+        // FIRESTORE CHƯA CÓ
+        // -----------------------------------------------------
 
         if (firestoreManager == null)
         {
             return;
         }
 
+
+        // -----------------------------------------------------
+        // BIND EVENT
+        // -----------------------------------------------------
+
         BindFirestoreEvents();
 
+
+        // -----------------------------------------------------
+        // MARK INITIALIZED
+        // -----------------------------------------------------
+
         initialized = true;
+
+
+        // -----------------------------------------------------
+        // CRITICAL FIX:
+        //
+        // Firestore có thể đã load PlayerData trước khi
+        // ItemUpgradeManager subscribe event.
+        //
+        // Vì vậy KHÔNG được chỉ dựa vào OnPlayerDataLoaded.
+        //
+        // Nếu CurrentPlayerData đã tồn tại:
+        // xử lý ngay lập tức.
+        // -----------------------------------------------------
+
+        if (firestoreManager.HasPlayerData &&
+            firestoreManager.CurrentPlayerData != null)
+        {
+            HandlePlayerDataLoaded(
+                firestoreManager.CurrentPlayerData
+            );
+        }
     }
 
+
+    // =========================================================
+    // FIRESTORE MANAGER READY
+    // =========================================================
+
+    private void HandleFirestoreManagerReady()
+    {
+        TryInitialize();
+    }
+
+
+    // =========================================================
+    // BIND FIRESTORE EVENTS
+    // =========================================================
 
     private void BindFirestoreEvents()
     {
         if (firestoreManager == null)
+        {
             return;
+        }
+
 
         firestoreManager.OnPlayerDataLoaded -=
             HandlePlayerDataLoaded;
 
         firestoreManager.OnPlayerDataLoaded +=
             HandlePlayerDataLoaded;
+
 
         firestoreManager.OnPlayerDataCleared -=
             HandlePlayerDataCleared;
@@ -129,10 +349,17 @@ public class ItemUpgradeManager : MonoBehaviour
     }
 
 
+    // =========================================================
+    // UNBIND
+    // =========================================================
+
     private void UnbindFirestoreEvents()
     {
         if (firestoreManager == null)
+        {
             return;
+        }
+
 
         firestoreManager.OnPlayerDataLoaded -=
             HandlePlayerDataLoaded;
@@ -143,26 +370,75 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
     // =========================================================
-    // FIRESTORE EVENTS
+    // PLAYER DATA LOADED
     // =========================================================
 
     private void HandlePlayerDataLoaded(
         PlayerData playerData)
     {
         if (playerData == null)
+        {
+            playerDataReady = false;
             return;
+        }
+
+
+        // =====================================================
+        // NORMALIZE UPGRADE LEVELS
+        // =====================================================
+
+        ClampAllUpgradeLevels(
+            playerData
+        );
+
+
+        // =====================================================
+        // MARK READY
+        // =====================================================
+
+        playerDataReady = true;
+
+
+        // =====================================================
+        // DEBUG
+        // =====================================================
 
         Debug.Log(
-            "[ItemUpgradeManager] Player upgrade data loaded."
+            "[ItemUpgradeManager] " +
+            "PLAYER UPGRADE DATA READY | " +
+            $"Gum={playerData.gumUpgradeLevel} | " +
+            $"Photon={playerData.photonUpgradeLevel} | " +
+            $"Shield={playerData.shieldUpgradeLevel} | " +
+            $"Magnet={playerData.magnetUpgradeLevel}",
+            this
         );
+
+
+        // =====================================================
+        // NOTIFY CONTROLLERS
+        // =====================================================
+
+        OnPlayerUpgradeDataReady?.Invoke();
     }
 
 
+    // =========================================================
+    // PLAYER DATA CLEARED
+    // =========================================================
+
     private void HandlePlayerDataCleared()
     {
+        playerDataReady = false;
+
+
         Debug.Log(
-            "[ItemUpgradeManager] Player upgrade data cleared."
+            "[ItemUpgradeManager] " +
+            "PLAYER UPGRADE DATA CLEARED.",
+            this
         );
+
+
+        OnPlayerUpgradeDataCleared?.Invoke();
     }
 
 
@@ -197,6 +473,18 @@ public class ItemUpgradeManager : MonoBehaviour
     // GET CURRENT LEVEL
     // =========================================================
 
+    /// <summary>
+    /// Lấy Level hiện tại.
+    ///
+    /// Compatibility:
+    /// Nếu chưa ready -> trả 1.
+    ///
+    /// KHÔNG dùng hàm này trong runtime controller để
+    /// quyết định upgrade đã sẵn sàng hay chưa.
+    ///
+    /// Controller phải dùng:
+    /// TryGetCurrentLevelData().
+    /// </summary>
     public int GetCurrentLevel(
         UpgradeItemType itemType)
     {
@@ -204,37 +492,170 @@ public class ItemUpgradeManager : MonoBehaviour
             GetCurrentPlayerData();
 
         if (data == null)
+        {
             return 1;
+        }
+
+
+        int level;
+
 
         switch (itemType)
         {
             case UpgradeItemType.Gum:
-                return Mathf.Max(
-                    1,
-                    data.gumUpgradeLevel
-                );
+
+                level =
+                    data.gumUpgradeLevel;
+
+                break;
+
 
             case UpgradeItemType.Photon:
-                return Mathf.Max(
-                    1,
-                    data.photonUpgradeLevel
-                );
+
+                level =
+                    data.photonUpgradeLevel;
+
+                break;
+
 
             case UpgradeItemType.Shield:
-                return Mathf.Max(
-                    1,
-                    data.shieldUpgradeLevel
-                );
+
+                level =
+                    data.shieldUpgradeLevel;
+
+                break;
+
 
             case UpgradeItemType.Magnet:
-                return Mathf.Max(
-                    1,
-                    data.magnetUpgradeLevel
-                );
+
+                level =
+                    data.magnetUpgradeLevel;
+
+                break;
+
 
             default:
+
                 return 1;
         }
+
+
+        return ClampLevel(
+            itemType,
+            level
+        );
+    }
+
+
+    // =========================================================
+    // TRY GET CURRENT LEVEL
+    // =========================================================
+
+    /// <summary>
+    /// API AUTHORITATIVE cho runtime.
+    ///
+    /// Nếu data chưa ready:
+    /// false + levelData = null.
+    ///
+    /// Không bao giờ giả mạo Level 1.
+    /// </summary>
+    public bool TryGetCurrentLevelData(
+        UpgradeItemType itemType,
+        out ItemUpgradeLevel levelData)
+    {
+        levelData = null;
+
+
+        if (!IsPlayerUpgradeDataReady())
+        {
+            return false;
+        }
+
+
+        ItemUpgradeData upgradeData =
+            GetUpgradeData(itemType);
+
+        if (upgradeData == null)
+        {
+            return false;
+        }
+
+
+        PlayerData playerData =
+            firestoreManager.CurrentPlayerData;
+
+        if (playerData == null)
+        {
+            return false;
+        }
+
+
+        int level =
+            GetCurrentLevel(
+                itemType
+            );
+
+
+        if (level < 1)
+        {
+            return false;
+        }
+
+
+        // =====================================================
+        // O(1)
+        // =====================================================
+
+        if (upgradeData.levels == null)
+        {
+            return false;
+        }
+
+
+        int index =
+            level - 1;
+
+
+        if (index < 0 ||
+            index >= upgradeData.levels.Length)
+        {
+            return false;
+        }
+
+
+        levelData =
+            upgradeData.levels[index];
+
+
+        if (levelData == null)
+        {
+            return false;
+        }
+
+
+        return true;
+    }
+
+
+    // =========================================================
+    // GET CURRENT LEVEL DATA
+    // =========================================================
+
+    public ItemUpgradeLevel GetCurrentLevelData(
+        UpgradeItemType itemType)
+    {
+        ItemUpgradeLevel levelData;
+
+
+        if (!TryGetCurrentLevelData(
+                itemType,
+                out levelData))
+        {
+            return null;
+        }
+
+
+        return levelData;
     }
 
 
@@ -246,7 +667,22 @@ public class ItemUpgradeManager : MonoBehaviour
         UpgradeItemType itemType)
     {
         int currentLevel =
-            GetCurrentLevel(itemType);
+            GetCurrentLevel(
+                itemType
+            );
+
+
+        int maxLevel =
+            GetMaxLevel(
+                itemType
+            );
+
+
+        if (currentLevel >= maxLevel)
+        {
+            return maxLevel;
+        }
+
 
         return currentLevel + 1;
     }
@@ -263,11 +699,34 @@ public class ItemUpgradeManager : MonoBehaviour
             GetUpgradeData(itemType);
 
         if (data == null)
+        {
             return 1;
+        }
 
-        return Mathf.Max(
-            1,
-            data.maxLevel
+
+        int configuredMax =
+            Mathf.Max(
+                1,
+                data.maxLevel
+            );
+
+
+        int actualArrayLength =
+            data.levels != null
+                ? data.levels.Length
+                : 0;
+
+
+        if (actualArrayLength <= 0)
+        {
+            return 1;
+        }
+
+
+        // Không cho maxLevel vượt quá số level thực tế.
+        return Mathf.Min(
+            configuredMax,
+            actualArrayLength
         );
     }
 
@@ -279,9 +738,17 @@ public class ItemUpgradeManager : MonoBehaviour
     public bool IsMaxLevel(
         UpgradeItemType itemType)
     {
-        return
-            GetCurrentLevel(itemType) >=
-            GetMaxLevel(itemType);
+        if (!IsPlayerUpgradeDataReady())
+        {
+            return false;
+        }
+
+
+        return GetCurrentLevel(
+            itemType
+        ) >= GetMaxLevel(
+            itemType
+        );
     }
 
 
@@ -297,7 +764,10 @@ public class ItemUpgradeManager : MonoBehaviour
             GetUpgradeData(itemType);
 
         if (data == null)
+        {
             return null;
+        }
+
 
         if (data.levels == null ||
             data.levels.Length == 0)
@@ -305,41 +775,51 @@ public class ItemUpgradeManager : MonoBehaviour
             return null;
         }
 
-        for (
-            int i = 0;
-            i < data.levels.Length;
-            i++)
+
+        if (level < 1)
         {
-            ItemUpgradeLevel levelData =
-                data.levels[i];
-
-            if (levelData == null)
-                continue;
-
-            if (levelData.level == level)
-            {
-                return levelData;
-            }
+            return null;
         }
 
-        return null;
-    }
+
+        int maxLevel =
+            GetMaxLevel(
+                itemType
+            );
 
 
-    // =========================================================
-    // GET CURRENT LEVEL DATA
-    // =========================================================
+        if (level > maxLevel)
+        {
+            return null;
+        }
 
-    public ItemUpgradeLevel GetCurrentLevelData(
-        UpgradeItemType itemType)
-    {
-        int level =
-            GetCurrentLevel(itemType);
 
-        return GetLevelData(
-            itemType,
-            level
-        );
+        // =====================================================
+        // O(1) DIRECT INDEX
+        // =====================================================
+
+        int index =
+            level - 1;
+
+
+        if (index < 0 ||
+            index >= data.levels.Length)
+        {
+            return null;
+        }
+
+
+        ItemUpgradeLevel result =
+            data.levels[index];
+
+
+        if (result == null)
+        {
+            return null;
+        }
+
+
+        return result;
     }
 
 
@@ -350,15 +830,21 @@ public class ItemUpgradeManager : MonoBehaviour
     public ItemUpgradeLevel GetNextLevelData(
         UpgradeItemType itemType)
     {
-        if (IsMaxLevel(itemType))
+        if (!IsPlayerUpgradeDataReady())
+        {
             return null;
+        }
 
-        int nextLevel =
-            GetNextLevel(itemType);
+
+        if (IsMaxLevel(itemType))
+        {
+            return null;
+        }
+
 
         return GetLevelData(
             itemType,
-            nextLevel
+            GetNextLevel(itemType)
         );
     }
 
@@ -370,15 +856,21 @@ public class ItemUpgradeManager : MonoBehaviour
     public int GetUpgradeCost(
         UpgradeItemType itemType)
     {
-        ItemUpgradeLevel nextLevel =
-            GetNextLevelData(itemType);
+        ItemUpgradeLevel nextData =
+            GetNextLevelData(
+                itemType
+            );
 
-        if (nextLevel == null)
+
+        if (nextData == null)
+        {
             return 0;
+        }
+
 
         return Mathf.Max(
             0,
-            nextLevel.upgradeCost
+            nextData.upgradeCost
         );
     }
 
@@ -392,8 +884,12 @@ public class ItemUpgradeManager : MonoBehaviour
         PlayerData data =
             GetCurrentPlayerData();
 
+
         if (data == null)
+        {
             return 0;
+        }
+
 
         return Mathf.Max(
             0,
@@ -409,8 +905,17 @@ public class ItemUpgradeManager : MonoBehaviour
     public bool CanAffordUpgrade(
         UpgradeItemType itemType)
     {
+        if (!IsPlayerUpgradeDataReady())
+        {
+            return false;
+        }
+
+
         int cost =
-            GetUpgradeCost(itemType);
+            GetUpgradeCost(
+                itemType
+            );
+
 
         return GetCurrentCoins() >= cost;
     }
@@ -423,22 +928,39 @@ public class ItemUpgradeManager : MonoBehaviour
     public bool CanUpgrade(
         UpgradeItemType itemType)
     {
-        if (!TryGetReadyManager())
+        if (!IsPlayerUpgradeDataReady())
+        {
             return false;
+        }
+
 
         if (GetUpgradeData(itemType) == null)
+        {
             return false;
+        }
+
 
         if (IsMaxLevel(itemType))
+        {
             return false;
+        }
 
-        ItemUpgradeLevel nextLevel =
-            GetNextLevelData(itemType);
 
-        if (nextLevel == null)
+        ItemUpgradeLevel nextData =
+            GetNextLevelData(
+                itemType
+            );
+
+
+        if (nextData == null)
+        {
             return false;
+        }
 
-        return CanAffordUpgrade(itemType);
+
+        return CanAffordUpgrade(
+            itemType
+        );
     }
 
 
@@ -449,11 +971,30 @@ public class ItemUpgradeManager : MonoBehaviour
     public async Task<bool> UpgradeAsync(
         UpgradeItemType itemType)
     {
-        if (!TryGetReadyManager())
+        // -----------------------------------------------------
+        // PREVENT DOUBLE CLICK / DOUBLE TRANSACTION
+        // -----------------------------------------------------
+
+        if (upgradeOperationRunning)
         {
             NotifyUpgradeFailed(
                 itemType,
-                "Hệ thống nâng cấp chưa sẵn sàng."
+                "Đang xử lý một nâng cấp khác."
+            );
+
+            return false;
+        }
+
+
+        // -----------------------------------------------------
+        // READY
+        // -----------------------------------------------------
+
+        if (!IsPlayerUpgradeDataReady())
+        {
+            NotifyUpgradeFailed(
+                itemType,
+                "Dữ liệu người chơi chưa sẵn sàng."
             );
 
             return false;
@@ -462,6 +1003,7 @@ public class ItemUpgradeManager : MonoBehaviour
 
         PlayerData playerData =
             firestoreManager.CurrentPlayerData;
+
 
         if (playerData == null)
         {
@@ -475,7 +1017,10 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
         ItemUpgradeData upgradeData =
-            GetUpgradeData(itemType);
+            GetUpgradeData(
+                itemType
+            );
+
 
         if (upgradeData == null)
         {
@@ -488,15 +1033,23 @@ public class ItemUpgradeManager : MonoBehaviour
         }
 
 
-        int currentLevel =
-            GetCurrentLevel(itemType);
+        // -----------------------------------------------------
+        // CURRENT LEVEL
+        // -----------------------------------------------------
+
+        int oldLevel =
+            GetCurrentLevel(
+                itemType
+            );
 
 
         int maxLevel =
-            GetMaxLevel(itemType);
+            GetMaxLevel(
+                itemType
+            );
 
 
-        if (currentLevel >= maxLevel)
+        if (oldLevel >= maxLevel)
         {
             NotifyUpgradeFailed(
                 itemType,
@@ -507,10 +1060,18 @@ public class ItemUpgradeManager : MonoBehaviour
         }
 
 
+        // -----------------------------------------------------
+        // NEXT DATA
+        // -----------------------------------------------------
+
+        int newLevel =
+            oldLevel + 1;
+
+
         ItemUpgradeLevel nextLevelData =
             GetLevelData(
                 itemType,
-                currentLevel + 1
+                newLevel
             );
 
 
@@ -518,12 +1079,16 @@ public class ItemUpgradeManager : MonoBehaviour
         {
             NotifyUpgradeFailed(
                 itemType,
-                $"Không tìm thấy dữ liệu Level {currentLevel + 1}."
+                $"Không tìm thấy dữ liệu Level {newLevel}."
             );
 
             return false;
         }
 
+
+        // -----------------------------------------------------
+        // COST
+        // -----------------------------------------------------
 
         int upgradeCost =
             Mathf.Max(
@@ -532,14 +1097,14 @@ public class ItemUpgradeManager : MonoBehaviour
             );
 
 
-        int currentCoins =
+        int oldCoins =
             Mathf.Max(
                 0,
                 playerData.coins
             );
 
 
-        if (currentCoins < upgradeCost)
+        if (oldCoins < upgradeCost)
         {
             NotifyUpgradeFailed(
                 itemType,
@@ -550,42 +1115,37 @@ public class ItemUpgradeManager : MonoBehaviour
         }
 
 
-        // =====================================================
-        // BACKUP
-        // =====================================================
-
-        int oldLevel =
-            currentLevel;
-
-        int oldCoins =
-            currentCoins;
-
-
-        // =====================================================
-        // APPLY LOCALLY
-        // =====================================================
-
-        int newLevel =
-            currentLevel + 1;
-
         int newCoins =
-            currentCoins - upgradeCost;
+            oldCoins - upgradeCost;
 
+
+        // -----------------------------------------------------
+        // LOCK
+        // -----------------------------------------------------
+
+        upgradeOperationRunning = true;
+
+
+        // -----------------------------------------------------
+        // APPLY LOCAL
+        // -----------------------------------------------------
 
         SetUpgradeLevel(
             itemType,
             newLevel
         );
 
+
         playerData.coins =
             newCoins;
 
 
-        // =====================================================
-        // SAVE FIRESTORE
-        // =====================================================
+        // -----------------------------------------------------
+        // SAVE
+        // -----------------------------------------------------
 
         bool saveSuccess = false;
+
 
         try
         {
@@ -596,16 +1156,18 @@ public class ItemUpgradeManager : MonoBehaviour
         catch (Exception exception)
         {
             Debug.LogError(
-                $"[ItemUpgradeManager] Upgrade save exception: {exception}"
+                "[ItemUpgradeManager] " +
+                $"Upgrade save exception: {exception}",
+                this
             );
 
             saveSuccess = false;
         }
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // SAVE FAILED → ROLLBACK
-        // =====================================================
+        // -----------------------------------------------------
 
         if (!saveSuccess)
         {
@@ -614,8 +1176,12 @@ public class ItemUpgradeManager : MonoBehaviour
                 oldLevel
             );
 
+
             playerData.coins =
                 oldCoins;
+
+
+            upgradeOperationRunning = false;
 
 
             NotifyUpgradeFailed(
@@ -623,20 +1189,35 @@ public class ItemUpgradeManager : MonoBehaviour
                 "Không thể lưu nâng cấp."
             );
 
+
             return false;
         }
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // SUCCESS
-        // =====================================================
+        // -----------------------------------------------------
+
+        upgradeOperationRunning = false;
+
 
         Debug.Log(
-            $"[ItemUpgradeManager] " +
-            $"{itemType}: Level {oldLevel} → {newLevel} | " +
-            $"Coins {oldCoins} → {newCoins}"
+            "[ItemUpgradeManager] " +
+            $"UPGRADE SUCCESS | " +
+            $"{itemType} | " +
+            $"Level {oldLevel} → {newLevel} | " +
+            $"Coins {oldCoins} → {newCoins}",
+            this
         );
 
+
+        // =====================================================
+        // IMPORTANT:
+        //
+        // CurrentPlayerData đã chứa newLevel.
+        //
+        // Controllers nhận event và refresh runtime.
+        // =====================================================
 
         OnUpgradeLevelChanged?.Invoke(
             itemType,
@@ -651,8 +1232,8 @@ public class ItemUpgradeManager : MonoBehaviour
 
         OnUpgradeSucceeded?.Invoke(
             itemType,
-            newLevel,
-            upgradeCost
+            oldLevel,
+            newLevel
         );
 
 
@@ -661,22 +1242,32 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
     // =========================================================
-    // SET LEVEL
+    // SET UPGRADE LEVEL
     // =========================================================
 
     private void SetUpgradeLevel(
         UpgradeItemType itemType,
         int level)
     {
-        if (firestoreManager == null ||
-            firestoreManager.CurrentPlayerData == null)
+        if (firestoreManager == null)
         {
             return;
         }
 
+
+        PlayerData data =
+            firestoreManager.CurrentPlayerData;
+
+
+        if (data == null)
+        {
+            return;
+        }
+
+
         level =
-            Mathf.Max(
-                1,
+            ClampLevel(
+                itemType,
                 level
             );
 
@@ -685,9 +1276,7 @@ public class ItemUpgradeManager : MonoBehaviour
         {
             case UpgradeItemType.Gum:
 
-                firestoreManager
-                    .CurrentPlayerData
-                    .gumUpgradeLevel =
+                data.gumUpgradeLevel =
                     level;
 
                 break;
@@ -695,9 +1284,7 @@ public class ItemUpgradeManager : MonoBehaviour
 
             case UpgradeItemType.Photon:
 
-                firestoreManager
-                    .CurrentPlayerData
-                    .photonUpgradeLevel =
+                data.photonUpgradeLevel =
                     level;
 
                 break;
@@ -705,9 +1292,7 @@ public class ItemUpgradeManager : MonoBehaviour
 
             case UpgradeItemType.Shield:
 
-                firestoreManager
-                    .CurrentPlayerData
-                    .shieldUpgradeLevel =
+                data.shieldUpgradeLevel =
                     level;
 
                 break;
@@ -715,9 +1300,7 @@ public class ItemUpgradeManager : MonoBehaviour
 
             case UpgradeItemType.Magnet:
 
-                firestoreManager
-                    .CurrentPlayerData
-                    .magnetUpgradeLevel =
+                data.magnetUpgradeLevel =
                     level;
 
                 break;
@@ -726,15 +1309,72 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
     // =========================================================
-    // GET PLAYER DATA
+    // CLAMP LEVEL
     // =========================================================
 
-    private PlayerData GetCurrentPlayerData()
+    private int ClampLevel(
+        UpgradeItemType itemType,
+        int level)
     {
-        if (!TryGetReadyManager())
-            return null;
+        int maxLevel =
+            GetMaxLevel(
+                itemType
+            );
 
-        return firestoreManager.CurrentPlayerData;
+
+        if (maxLevel < 1)
+        {
+            maxLevel = 1;
+        }
+
+
+        return Mathf.Clamp(
+            level,
+            1,
+            maxLevel
+        );
+    }
+
+
+    // =========================================================
+    // CLAMP ALL
+    // =========================================================
+
+    private void ClampAllUpgradeLevels(
+        PlayerData data)
+    {
+        if (data == null)
+        {
+            return;
+        }
+
+
+        data.gumUpgradeLevel =
+            ClampLevel(
+                UpgradeItemType.Gum,
+                data.gumUpgradeLevel
+            );
+
+
+        data.photonUpgradeLevel =
+            ClampLevel(
+                UpgradeItemType.Photon,
+                data.photonUpgradeLevel
+            );
+
+
+        data.shieldUpgradeLevel =
+            ClampLevel(
+                UpgradeItemType.Shield,
+                data.shieldUpgradeLevel
+            );
+
+
+        data.magnetUpgradeLevel =
+            ClampLevel(
+                UpgradeItemType.Magnet,
+                data.magnetUpgradeLevel
+            );
     }
 
 
@@ -742,50 +1382,52 @@ public class ItemUpgradeManager : MonoBehaviour
     // READY CHECK
     // =========================================================
 
-    private bool TryGetReadyManager()
+    private bool IsPlayerUpgradeDataReady()
     {
-        if (firestoreManager == null)
+        if (!initialized)
         {
-            firestoreManager =
-                FirestorePlayerDataManager.Instance;
+            TryInitialize();
+        }
 
-            if (firestoreManager != null)
+
+        if (!initialized)
+        {
+            return false;
+        }
+
+
+        if (!playerDataReady)
+        {
+            if (firestoreManager != null &&
+                firestoreManager.HasPlayerData &&
+                firestoreManager.CurrentPlayerData != null)
             {
-                BindFirestoreEvents();
+                HandlePlayerDataLoaded(
+                    firestoreManager.CurrentPlayerData
+                );
             }
         }
 
-        if (firestoreManager == null)
-        {
-            return false;
-        }
 
-        if (!firestoreManager.HasPlayerData)
-        {
-            return false;
-        }
-
-        return true;
+        return playerDataReady &&
+               firestoreManager != null &&
+               firestoreManager.CurrentPlayerData != null;
     }
 
 
     // =========================================================
-    // NOTIFY FAILED
+    // GET CURRENT PLAYER DATA
     // =========================================================
 
-    private void NotifyUpgradeFailed(
-        UpgradeItemType itemType,
-        string reason)
+    private PlayerData GetCurrentPlayerData()
     {
-        Debug.LogWarning(
-            $"[ItemUpgradeManager] " +
-            $"Upgrade {itemType} failed: {reason}"
-        );
+        if (!IsPlayerUpgradeDataReady())
+        {
+            return null;
+        }
 
-        OnUpgradeFailed?.Invoke(
-            itemType,
-            reason
-        );
+
+        return firestoreManager.CurrentPlayerData;
     }
 
 
@@ -796,20 +1438,26 @@ public class ItemUpgradeManager : MonoBehaviour
     [ContextMenu("Debug/Log Upgrade Status")]
     private void DebugLogUpgradeStatus()
     {
-        if (!TryGetReadyManager())
+        Debug.Log(
+            "========================================"
+        );
+
+        Debug.Log(
+            "[ItemUpgradeManager] " +
+            $"Initialized={initialized} | " +
+            $"PlayerReady={playerDataReady}"
+        );
+
+
+        if (!IsPlayerUpgradeDataReady())
         {
-            Debug.Log(
+            Debug.LogWarning(
                 "[ItemUpgradeManager] " +
-                "Player data chưa sẵn sàng."
+                "PlayerData chưa sẵn sàng."
             );
 
             return;
         }
-
-
-        Debug.Log(
-            "========== ITEM UPGRADE STATUS =========="
-        );
 
 
         LogItemStatus(
@@ -830,33 +1478,79 @@ public class ItemUpgradeManager : MonoBehaviour
 
 
         Debug.Log(
-            $"Coins: {GetCurrentCoins()}"
-        );
-
-
-        Debug.Log(
-            "========================================="
+            "========================================"
         );
     }
 
+    // =========================================================
+// NOTIFY UPGRADE FAILED
+// =========================================================
+
+private void NotifyUpgradeFailed(
+    UpgradeItemType itemType,
+    string reason)
+{
+    Debug.LogWarning(
+        "[ItemUpgradeManager] " +
+        $"Upgrade {itemType} failed: {reason}",
+        this
+    );
+
+    OnUpgradeFailed?.Invoke(
+        itemType,
+        reason
+    );
+}
+    // =========================================================
+    // DEBUG ITEM
+    // =========================================================
 
     private void LogItemStatus(
         UpgradeItemType itemType)
     {
         int level =
-            GetCurrentLevel(itemType);
+            GetCurrentLevel(
+                itemType
+            );
 
-        int maxLevel =
-            GetMaxLevel(itemType);
 
-        int cost =
-            GetUpgradeCost(itemType);
+        int max =
+            GetMaxLevel(
+                itemType
+            );
+
+
+        ItemUpgradeLevel data =
+            GetCurrentLevelData(
+                itemType
+            );
+
+
+        if (data == null)
+        {
+            Debug.Log(
+                $"[ItemUpgradeManager] " +
+                $"{itemType} | " +
+                $"Level={level}/{max} | " +
+                "DATA=NULL"
+            );
+
+            return;
+        }
 
 
         Debug.Log(
+            $"[ItemUpgradeManager] " +
             $"{itemType} | " +
-            $"Level {level}/{maxLevel} | " +
-            $"Next Cost: {cost}"
+            $"Level={level}/{max} | " +
+            $"DataLevel={data.level} | " +
+            $"Duration={data.duration} | " +
+            $"HorizontalSpeed={data.horizontalSpeed} | " +
+            $"SpeedMultiplier={data.speedMultiplier} | " +
+            $"MaxHits={data.maxHits} | " +
+            $"Radius={data.magnetRadius} | " +
+            $"PullSpeed={data.pullSpeed} | " +
+            $"CollectDistance={data.collectDistance}"
         );
     }
 }

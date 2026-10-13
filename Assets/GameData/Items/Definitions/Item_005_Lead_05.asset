@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_005_Lead_05
+  m_EditorClassIdentifier: 
+  itemId: 5
+  itemName: "Lead T\u1EBFt Vi\u1EC7t"
+  description: "Trang tr\xED T\u1EBFt v\u1EDBi hoa mai, h\u1ECDa ti\u1EBFt \u0111\u1ECF
+    v\xE0ng v\xE0 phong c\xE1ch l\u1EC5 h\u1ED9i Vi\u1EC7t Nam."
+  category: 0
+  subCategory: Lead
+  rarity: 2
+  icon: {fileID: 0}
+  prefab: {fileID: 6326726421732722259, guid: 21e0682a54a0af740a99353d97a13624, type: 3}
+  visualId: VISUAL_ITEM_005
+  purchasable: 1
+  price: 1000
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 1
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 5
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 5
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 1, Acceleration: 5, Handling: 5'
+  passiveDescription: Lead 05 - Vehicle Common

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_059_Legend_Street_Set
+  m_EditorClassIdentifier: 
+  itemId: 59
+  itemName: "Trang Ph\u1EE5c 19"
+  description: "Trang Ph\u1EE5c 19 - Outfit Epic"
+  category: 1
+  subCategory: "Trang Ph\u1EE5c"
+  rarity: 3
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_059
+  purchasable: 1
+  price: 1000
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: Acceleration
+      value: 16
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 16
+      isPercent: 1
+      condition: 
+    - statKey: JumpForce
+      value: 2
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'Acceleration: 16, Handling: 16, JumpForce: 2'
+  passiveDescription: "Trang Ph\u1EE5c 19 - Outfit Epic"

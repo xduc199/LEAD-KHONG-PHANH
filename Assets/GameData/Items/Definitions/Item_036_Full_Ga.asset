@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_036_Full_Ga
+  m_EditorClassIdentifier: 
+  itemId: 36
+  itemName: "Xe Huy\u1EC1n Tho\u1EA1i 01"
+  description: "Xe Huy\u1EC1n Tho\u1EA1i 01 - Vehicle Legendary"
+  category: 0
+  subCategory: "Huy\u1EC1n Tho\u1EA1i"
+  rarity: 4
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_036
+  purchasable: 1
+  price: 2000
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 5
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 20
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 20
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 5, Acceleration: 20, Handling: 20'
+  passiveDescription: "Xe Huy\u1EC1n Tho\u1EA1i 01 - Vehicle Legendary"

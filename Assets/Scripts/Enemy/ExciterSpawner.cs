@@ -120,9 +120,13 @@ public class ExciterSpawner : MonoBehaviour
 
     [Header("Redline Height")]
 
-    [Tooltip("Độ cao RedLine so với Player.")]
-    [SerializeField]
-    private float redLineHeightOffset = 1.2f;
+    [Tooltip("Độ cao mặt đường dùng cho Traffic/Exciter.")]
+[SerializeField]
+private float trafficGroundY = 0f;
+
+[Tooltip("Độ cao RedLine phía trên mặt đường.")]
+[SerializeField]
+private float redLineHeightOffset = 1.2f;
 
 
     //=============================================================
@@ -792,12 +796,11 @@ public class ExciterSpawner : MonoBehaviour
 
 
         lockedWarningCenters[index] =
-            new Vector3(
-                trackedWarningX[index],
-                playerTransform.position.y +
-                redLineHeightOffset,
-                0f
-            );
+    new Vector3(
+        trackedWarningX[index],
+        trafficGroundY,
+        0f
+    );
 
 
         warningLocks[index] =
@@ -1036,15 +1039,12 @@ public class ExciterSpawner : MonoBehaviour
             //=====================================================
 
             points.Add(
-                new Vector3(
-                    centerX + offset,
-
-                    playerTransform.position.y +
-                    redLineHeightOffset,
-
-                    z
-                )
-            );
+    new Vector3(
+        centerX + offset,
+        trafficGroundY,
+        z
+    )
+);
         }
 
 
@@ -1118,10 +1118,16 @@ public class ExciterSpawner : MonoBehaviour
             i++
         )
         {
-            line.SetPosition(
-                i,
-                points[i]
-            );
+            Vector3 point =
+    points[i];
+
+point.y +=
+    redLineHeightOffset;
+
+line.SetPosition(
+    i,
+    point
+);
         }
     }
 

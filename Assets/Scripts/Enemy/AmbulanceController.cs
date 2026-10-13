@@ -386,148 +386,124 @@ public class AmbulanceController : MonoBehaviour
     //=============================================================
 
     public void Initialize(
-        int selectedLane,
-        Transform player
-    )
+    int selectedLane,
+    Transform player
+)
+{
+    playerTransform =
+        player;
+
+    selectedLane =
+        Mathf.Clamp(
+            selectedLane,
+            0,
+            2
+        );
+
+    switch (selectedLane)
     {
-        playerTransform =
-            player;
+        case 0:
 
+            laneX =
+                leftLaneX;
 
-        selectedLane =
-            Mathf.Clamp(
-                selectedLane,
-                0,
-                2
-            );
+            break;
 
+        case 1:
 
-        switch (selectedLane)
-        {
-            case 0:
+            laneX =
+                centerLaneX;
 
-                laneX =
-                    leftLaneX;
+            break;
 
-                break;
+        default:
 
+            laneX =
+                rightLaneX;
 
-            case 1:
-
-                laneX =
-                    centerLaneX;
-
-                break;
-
-
-            default:
-
-                laneX =
-                    rightLaneX;
-
-                break;
-        }
-
-
-        Vector3 position =
-            transform.position;
-
-        position.x =
-            laneX;
-
-        position.y =
-            player != null
-                ? player.position.y +
-                  vehicleHeightOffset
-                : position.y +
-                  vehicleHeightOffset;
-
-        transform.position =
-            position;
-
-
-        spawnTime =
-            Time.time;
-
-        currentSpeed =
-            Mathf.Max(
-                minSpeed,
-                useFixedSpeed
-                    ? fixedSpeed
-                    : Random.Range(
-                        minSpeed,
-                        maxSpeed
-                    )
-            );
-
-        speedVelocity =
-            0f;
-
-        playerSpeed =
-            0f;
-
-        highestStableSpeed =
-            currentSpeed;
-
-        if (playerTransform != null)
-        {
-            lastPlayerPosition =
-                playerTransform.position;
-        }
-
-        nextPlayerHitTime =
-            0f;
-
-        nextTrafficHitTime =
-            0f;
-
-        lastHitTraffic =
-            null;
-
-        lastTrafficHitTime =
-            -999f;
-
-        isPhotonLaunched =
-            false;
-
-        photonLaunchDestroyTime =
-            0f;
-
-        shieldCollisionBlocked =
-            false;
-
-        ignoredPlayerColliders =
-            null;
-
-
-        RestorePlayerCollisions();
-
-
-        if (rb != null)
-        {
-            rb.isKinematic =
-                true;
-
-            rb.useGravity =
-                false;
-
-            rb.linearVelocity =
-                Vector3.zero;
-
-            rb.angularVelocity =
-                Vector3.zero;
-
-            rb.collisionDetectionMode =
-                CollisionDetectionMode.ContinuousSpeculative;
-        }
-
-
-        SetForwardRotation();
-
-
-        RestartEngineAudio();
+            break;
     }
 
+    Vector3 position =
+        transform.position;
+
+    position.x =
+        laneX;
+
+    transform.position =
+        position;
+
+    spawnTime =
+        Time.time;
+
+    currentSpeed =
+        Mathf.Max(
+            minSpeed,
+            useFixedSpeed
+                ? fixedSpeed
+                : Random.Range(
+                    minSpeed,
+                    maxSpeed
+                )
+        );
+
+    speedVelocity =
+        0f;
+
+    playerSpeed =
+        0f;
+
+    highestStableSpeed =
+        currentSpeed;
+
+    if (playerTransform != null)
+    {
+        lastPlayerPosition =
+            playerTransform.position;
+    }
+
+    nextPlayerHitTime =
+        0f;
+
+    nextTrafficHitTime =
+        0f;
+
+    lastHitTraffic =
+        null;
+
+    lastTrafficHitTime =
+        -999f;
+
+    isPhotonLaunched =
+        false;
+
+    photonLaunchDestroyTime =
+        0f;
+
+    shieldCollisionBlocked =
+        false;
+
+    ignoredPlayerColliders =
+        null;
+
+    RestorePlayerCollisions();
+
+    if (rb != null)
+    {
+        rb.isKinematic =
+            true;
+
+        rb.useGravity =
+            false;
+
+        rb.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousSpeculative;
+    }
+
+    SetForwardRotation();
+
+    RestartEngineAudio();
+}
 
     //=============================================================
     // SET PLAYER

@@ -1,17 +1,41 @@
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.UI;
 
-public class MainMenuSettingsUI : MonoBehaviour
+[DisallowMultipleComponent]
+public sealed class MainMenuSettingsUI : MonoBehaviour
 {
     public static MainMenuSettingsUI Instance { get; private set; }
+
+    // ============================================================
+    // PLAYER PREFS KEYS
+    // ============================================================
+
+    private const string MASTER_AUDIO_ENABLED_KEY = "MasterAudioEnabled";
+    private const string MUSIC_ENABLED_KEY = "MusicEnabled";
+    private const string SFX_ENABLED_KEY = "SfxEnabled";
+
+    // ============================================================
+    // AUDIO MIXER PARAMETERS
+    // ============================================================
+
+    private const string MASTER_VOLUME_PARAMETER = "MasterVolume";
+    private const string MUSIC_VOLUME_PARAMETER = "MusicVolume";
+    private const string SFX_VOLUME_PARAMETER = "SFXVolume";
+
+    private const float AUDIO_ON_VOLUME = 0f;
+    private const float AUDIO_OFF_VOLUME = -80f;
 
     // ============================================================
     // AUDIO SOURCE
     // ============================================================
 
-    [Header("Audio Source")]
-    [SerializeField] private AudioSource musicAudioSource;
+    [Header("Audio")]
+    [Tooltip("AudioMixer dùng chung cho toàn bộ game.")]
+    [SerializeField] private AudioMixer gameAudioMixer;
 
+    [Tooltip("Music AudioSource của Main Menu.")]
+    [SerializeField] private AudioSource musicAudioSource;
 
     // ============================================================
     // PANEL
@@ -20,36 +44,56 @@ public class MainMenuSettingsUI : MonoBehaviour
     [Header("Panel")]
     [SerializeField] private GameObject settingsPanel;
 
-
     // ============================================================
     // AUDIO TOGGLES
     // ============================================================
 
-    [Header("Audio")]
+    [Header("Audio Toggles")]
+    [Tooltip("Bật/tắt toàn bộ âm thanh game.")]
+    [SerializeField] private Toggle masterAudioToggle;
+
+    [Tooltip("Bật/tắt riêng nhạc.")]
     [SerializeField] private Toggle musicToggle;
 
+    [Tooltip("Bật/tắt riêng hiệu ứng âm thanh.")]
     [SerializeField] private Toggle sfxToggle;
 
+    // ============================================================
+    // ACCOUNT / GAME BUTTONS
+    // ============================================================
+
+    [Header("Account / Game")]
+    [SerializeField] private Button logoutButton;
+
+    [SerializeField] private Button exitGameButton;
+
+    // ============================================================
+    // MAIN MENU CONTROLLER
+    // ============================================================
+
+    [Header("Main Menu Controller")]
+    [SerializeField] private MainMenuController mainMenuController;
 
     // ============================================================
     // STATE
     // ============================================================
 
-    private bool musicEnabled = true;
-    private bool sfxEnabled = true;
-
+    private bool masterAudioEnabled;
+    private bool musicEnabled;
+    private bool sfxEnabled;
 
     // ============================================================
     // PUBLIC STATE
     // ============================================================
 
+    public bool IsMasterAudioEnabled => masterAudioEnabled;
+
     public bool IsMusicEnabled => musicEnabled;
 
     public bool IsSFXEnabled => sfxEnabled;
 
-
     // ============================================================
-    // AWAKE
+    // UNITY
     // ============================================================
 
     private void Awake()
@@ -62,9 +106,9 @@ public class MainMenuSettingsUI : MonoBehaviour
 
         Instance = this;
 
+        ResolveMainMenuController();
         Initialize();
     }
-
 
     // ============================================================
     // INITIALIZE
@@ -72,75 +116,245 @@ public class MainMenuSettingsUI : MonoBehaviour
 
     private void Initialize()
     {
-        // --------------------------------------------------------
-        // CLOSE SETTINGS PANEL
-        // --------------------------------------------------------
-
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
 
-
         // --------------------------------------------------------
-        // DEFAULT STATE
-        // --------------------------------------------------------
-
-        musicEnabled = true;
-        sfxEnabled = true;
-
-
-        // --------------------------------------------------------
-        // MUSIC TOGGLE
+        // LOAD SHARED AUDIO STATE
         // --------------------------------------------------------
 
-        if (musicToggle != null)
+        masterAudioEnabled =
+            LoadMasterAudioState();
+
+        musicEnabled =
+            LoadMusicState();
+
+        sfxEnabled =
+            LoadSFXState();
+
+        // --------------------------------------------------------
+        // AUDIO SOURCE
+        // --------------------------------------------------------
+
+        if (musicAudioSource != null)
         {
-            musicToggle.SetIsOnWithoutNotify(musicEnabled);
-
-            musicToggle.onValueChanged.RemoveListener(
-                OnMusicToggleChanged
-            );
-
-            musicToggle.onValueChanged.AddListener(
-                OnMusicToggleChanged
+            musicAudioSource.loop = true;
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[MainMenuSettings] " +
+                "Music AudioSource chưa được gán.",
+                this
             );
         }
 
-
         // --------------------------------------------------------
-        // SFX TOGGLE
-        // --------------------------------------------------------
-
-        if (sfxToggle != null)
-        {
-            sfxToggle.SetIsOnWithoutNotify(sfxEnabled);
-
-            sfxToggle.onValueChanged.RemoveListener(
-                OnSFXToggleChanged
-            );
-
-            sfxToggle.onValueChanged.AddListener(
-                OnSFXToggleChanged
-            );
-        }
-
-
-        // --------------------------------------------------------
-        // APPLY INITIAL MUSIC STATE
+        // BIND UI
         // --------------------------------------------------------
 
-        ApplyMusicState();
+        BindMasterAudioToggle();
+        BindMusicToggle();
+        BindSFXToggle();
+
+        BindLogoutButton();
+        BindExitGameButton();
+
+        // --------------------------------------------------------
+        // APPLY AUDIO
+        // --------------------------------------------------------
+
+        ApplyAudioState();
     }
 
+    // ============================================================
+    // LOAD MASTER AUDIO STATE
+    // ============================================================
+
+    private static bool LoadMasterAudioState()
+    {
+        return PlayerPrefs.GetInt(
+            MASTER_AUDIO_ENABLED_KEY,
+            1
+        ) == 1;
+    }
 
     // ============================================================
-    // MUSIC
+    // LOAD MUSIC STATE
     // ============================================================
 
-    private void OnMusicToggleChanged(bool enabled)
+    private static bool LoadMusicState()
+    {
+        return PlayerPrefs.GetInt(
+            MUSIC_ENABLED_KEY,
+            1
+        ) == 1;
+    }
+
+    // ============================================================
+    // LOAD SFX STATE
+    // ============================================================
+
+    private static bool LoadSFXState()
+    {
+        return PlayerPrefs.GetInt(
+            SFX_ENABLED_KEY,
+            1
+        ) == 1;
+    }
+
+    // ============================================================
+    // SAVE MASTER AUDIO STATE
+    // ============================================================
+
+    private static void SaveMasterAudioState(
+        bool enabled
+    )
+    {
+        PlayerPrefs.SetInt(
+            MASTER_AUDIO_ENABLED_KEY,
+            enabled ? 1 : 0
+        );
+
+        PlayerPrefs.Save();
+    }
+
+    // ============================================================
+    // SAVE MUSIC STATE
+    // ============================================================
+
+    private static void SaveMusicState(
+        bool enabled
+    )
+    {
+        PlayerPrefs.SetInt(
+            MUSIC_ENABLED_KEY,
+            enabled ? 1 : 0
+        );
+
+        PlayerPrefs.Save();
+    }
+
+    // ============================================================
+    // SAVE SFX STATE
+    // ============================================================
+
+    private static void SaveSFXState(
+        bool enabled
+    )
+    {
+        PlayerPrefs.SetInt(
+            SFX_ENABLED_KEY,
+            enabled ? 1 : 0
+        );
+
+        PlayerPrefs.Save();
+    }
+
+    // ============================================================
+    // RESOLVE MAIN MENU CONTROLLER
+    // ============================================================
+
+    private void ResolveMainMenuController()
+    {
+        if (mainMenuController != null)
+            return;
+
+        mainMenuController =
+            FindFirstObjectByType<MainMenuController>();
+
+        if (mainMenuController == null)
+        {
+            Debug.LogError(
+                "[MainMenuSettings] Không tìm thấy " +
+                "MainMenuController trong Scene.",
+                this
+            );
+        }
+    }
+
+    // ============================================================
+    // MASTER AUDIO TOGGLE
+    // ============================================================
+
+    private void BindMasterAudioToggle()
+    {
+        if (masterAudioToggle == null)
+            return;
+
+        masterAudioToggle.onValueChanged.RemoveListener(
+            OnMasterAudioToggleChanged
+        );
+
+        masterAudioToggle.SetIsOnWithoutNotify(
+            masterAudioEnabled
+        );
+
+        masterAudioToggle.onValueChanged.AddListener(
+            OnMasterAudioToggleChanged
+        );
+    }
+
+    // ============================================================
+    // MASTER AUDIO CHANGED
+    // ============================================================
+
+    private void OnMasterAudioToggleChanged(
+        bool enabled
+    )
+    {
+        masterAudioEnabled = enabled;
+
+        SaveMasterAudioState(
+            masterAudioEnabled
+        );
+
+        ApplyAudioState();
+
+        Debug.Log(
+            "[MainMenuSettings] Master Audio = " +
+            (masterAudioEnabled ? "ON" : "OFF"),
+            this
+        );
+    }
+
+    // ============================================================
+    // MUSIC TOGGLE
+    // ============================================================
+
+    private void BindMusicToggle()
+    {
+        if (musicToggle == null)
+            return;
+
+        musicToggle.onValueChanged.RemoveListener(
+            OnMusicToggleChanged
+        );
+
+        musicToggle.SetIsOnWithoutNotify(
+            musicEnabled
+        );
+
+        musicToggle.onValueChanged.AddListener(
+            OnMusicToggleChanged
+        );
+    }
+
+    // ============================================================
+    // MUSIC CHANGED
+    // ============================================================
+
+    private void OnMusicToggleChanged(
+        bool enabled
+    )
     {
         musicEnabled = enabled;
 
-        ApplyMusicState();
+        SaveMusicState(
+            musicEnabled
+        );
+
+        ApplyAudioState();
 
         Debug.Log(
             "[MainMenuSettings] Music = " +
@@ -149,42 +363,208 @@ public class MainMenuSettingsUI : MonoBehaviour
         );
     }
 
+    // ============================================================
+    // SFX TOGGLE
+    // ============================================================
 
-    private void ApplyMusicState()
+    private void BindSFXToggle()
     {
-        if (musicAudioSource == null)
-        {
-            Debug.LogWarning(
-                "[MainMenuSettings] " +
-                "Music AudioSource chưa được gán.",
-                this
-            );
-
+        if (sfxToggle == null)
             return;
-        }
 
-        musicAudioSource.mute = !musicEnabled;
+        sfxToggle.onValueChanged.RemoveListener(
+            OnSFXToggleChanged
+        );
+
+        sfxToggle.SetIsOnWithoutNotify(
+            sfxEnabled
+        );
+
+        sfxToggle.onValueChanged.AddListener(
+            OnSFXToggleChanged
+        );
     }
 
-
     // ============================================================
-    // SFX
+    // SFX CHANGED
     // ============================================================
 
-    private void OnSFXToggleChanged(bool enabled)
+    private void OnSFXToggleChanged(
+        bool enabled
+    )
     {
         sfxEnabled = enabled;
+
+        SaveSFXState(
+            sfxEnabled
+        );
+
+        ApplyAudioState();
 
         Debug.Log(
             "[MainMenuSettings] SFX = " +
             (sfxEnabled ? "ON" : "OFF"),
             this
         );
-
-        // SFX chưa kết nối vì hiện tại
-        // chưa xác định AudioSource SFX thực tế.
     }
 
+    // ============================================================
+    // APPLY AUDIO STATE
+    // ============================================================
+
+    private void ApplyAudioState()
+    {
+        // --------------------------------------------------------
+        // AUDIO MIXER
+        // --------------------------------------------------------
+
+        if (gameAudioMixer != null)
+        {
+            ApplyMixerState();
+        }
+        else
+        {
+            // ----------------------------------------------------
+            // FALLBACK
+            // ----------------------------------------------------
+
+            ApplyFallbackMusicState();
+        }
+    }
+
+    // ============================================================
+    // APPLY MIXER STATE
+    // ============================================================
+
+    private void ApplyMixerState()
+    {
+        // --------------------------------------------------------
+        // MASTER
+        // --------------------------------------------------------
+
+        bool masterApplied =
+            gameAudioMixer.SetFloat(
+                MASTER_VOLUME_PARAMETER,
+                masterAudioEnabled
+                    ? AUDIO_ON_VOLUME
+                    : AUDIO_OFF_VOLUME
+            );
+
+        if (!masterApplied)
+        {
+            Debug.LogWarning(
+                "[MainMenuSettings] Không tìm thấy exposed " +
+                "parameter: " +
+                MASTER_VOLUME_PARAMETER,
+                this
+            );
+        }
+
+        // --------------------------------------------------------
+        // MUSIC
+        // --------------------------------------------------------
+
+        bool musicApplied =
+            gameAudioMixer.SetFloat(
+                MUSIC_VOLUME_PARAMETER,
+                musicEnabled
+                    ? AUDIO_ON_VOLUME
+                    : AUDIO_OFF_VOLUME
+            );
+
+        if (!musicApplied)
+        {
+            Debug.LogWarning(
+                "[MainMenuSettings] Không tìm thấy exposed " +
+                "parameter: " +
+                MUSIC_VOLUME_PARAMETER,
+                this
+            );
+        }
+
+        // --------------------------------------------------------
+        // SFX
+        // --------------------------------------------------------
+
+        bool sfxApplied =
+            gameAudioMixer.SetFloat(
+                SFX_VOLUME_PARAMETER,
+                sfxEnabled
+                    ? AUDIO_ON_VOLUME
+                    : AUDIO_OFF_VOLUME
+            );
+
+        if (!sfxApplied)
+        {
+            Debug.LogWarning(
+                "[MainMenuSettings] Không tìm thấy exposed " +
+                "parameter: " +
+                SFX_VOLUME_PARAMETER,
+                this
+            );
+        }
+    }
+
+    // ============================================================
+    // FALLBACK MUSIC STATE
+    // ============================================================
+
+    private void ApplyFallbackMusicState()
+    {
+        if (musicAudioSource == null)
+            return;
+
+        bool finalMusicState =
+            masterAudioEnabled &&
+            musicEnabled;
+
+        musicAudioSource.mute =
+            !finalMusicState;
+    }
+
+    // ============================================================
+    // REFRESH SHARED STATE
+    // ============================================================
+
+    private void RefreshSharedAudioState()
+    {
+        masterAudioEnabled =
+            LoadMasterAudioState();
+
+        musicEnabled =
+            LoadMusicState();
+
+        sfxEnabled =
+            LoadSFXState();
+    }
+
+    // ============================================================
+    // REFRESH TOGGLES
+    // ============================================================
+
+    private void RefreshToggleStates()
+    {
+        if (masterAudioToggle != null)
+        {
+            masterAudioToggle.SetIsOnWithoutNotify(
+                masterAudioEnabled
+            );
+        }
+
+        if (musicToggle != null)
+        {
+            musicToggle.SetIsOnWithoutNotify(
+                musicEnabled
+            );
+        }
+
+        if (sfxToggle != null)
+        {
+            sfxToggle.SetIsOnWithoutNotify(
+                sfxEnabled
+            );
+        }
+    }
 
     // ============================================================
     // OPEN
@@ -204,8 +584,11 @@ public class MainMenuSettingsUI : MonoBehaviour
         }
 
         settingsPanel.SetActive(true);
-    }
 
+        RefreshSharedAudioState();
+        RefreshToggleStates();
+        ApplyAudioState();
+    }
 
     // ============================================================
     // CLOSE
@@ -219,9 +602,8 @@ public class MainMenuSettingsUI : MonoBehaviour
         settingsPanel.SetActive(false);
     }
 
-
     // ============================================================
-    // TOGGLE PANEL
+    // TOGGLE
     // ============================================================
 
     public void Toggle()
@@ -229,11 +611,153 @@ public class MainMenuSettingsUI : MonoBehaviour
         if (settingsPanel == null)
             return;
 
-        settingsPanel.SetActive(
-            !settingsPanel.activeSelf
+        bool newState =
+            !settingsPanel.activeSelf;
+
+        settingsPanel.SetActive(newState);
+
+        if (!newState)
+            return;
+
+        RefreshSharedAudioState();
+        RefreshToggleStates();
+        ApplyAudioState();
+    }
+
+    // ============================================================
+    // LOGOUT
+    // ============================================================
+
+    private void BindLogoutButton()
+    {
+        if (logoutButton == null)
+            return;
+
+        logoutButton.onClick.RemoveListener(
+            OnLogoutButtonClicked
+        );
+
+        logoutButton.onClick.AddListener(
+            OnLogoutButtonClicked
         );
     }
 
+    private void OnLogoutButtonClicked()
+    {
+        ResolveMainMenuController();
+
+        if (mainMenuController == null)
+        {
+            Debug.LogError(
+                "[MainMenuSettings] Không thể Logout: " +
+                "MainMenuController không tồn tại.",
+                this
+            );
+
+            return;
+        }
+
+        Debug.Log(
+            "[MainMenuSettings] " +
+            "Logout Button -> MainMenuController.Quit()",
+            this
+        );
+
+        mainMenuController.Quit();
+    }
+
+    // ============================================================
+    // EXIT GAME
+    // ============================================================
+
+    private void BindExitGameButton()
+    {
+        if (exitGameButton == null)
+            return;
+
+        exitGameButton.onClick.RemoveListener(
+            OnExitGameButtonClicked
+        );
+
+        exitGameButton.onClick.AddListener(
+            OnExitGameButtonClicked
+        );
+    }
+
+    private void OnExitGameButtonClicked()
+    {
+        ResolveMainMenuController();
+
+        if (mainMenuController == null)
+        {
+            Debug.LogError(
+                "[MainMenuSettings] Không thể thoát game: " +
+                "MainMenuController không tồn tại.",
+                this
+            );
+
+            return;
+        }
+
+        Debug.Log(
+            "[MainMenuSettings] " +
+            "Exit Game Button -> MainMenuController.ExitGame()",
+            this
+        );
+
+        mainMenuController.ExitGame();
+    }
+
+    // ============================================================
+    // SET MAIN MENU CONTROLLER
+    // ============================================================
+
+    public void SetMainMenuController(
+        MainMenuController controller
+    )
+    {
+        mainMenuController = controller;
+    }
+
+    // ============================================================
+    // SET LOGOUT BUTTON
+    // ============================================================
+
+    public void SetLogoutButton(
+        Button button
+    )
+    {
+        if (logoutButton != null)
+        {
+            logoutButton.onClick.RemoveListener(
+                OnLogoutButtonClicked
+            );
+        }
+
+        logoutButton = button;
+
+        BindLogoutButton();
+    }
+
+    // ============================================================
+    // SET EXIT GAME BUTTON
+    // ============================================================
+
+    public void SetExitGameButton(
+        Button button
+    )
+    {
+        if (exitGameButton != null)
+        {
+            exitGameButton.onClick.RemoveListener(
+                OnExitGameButtonClicked
+            );
+        }
+
+        exitGameButton = button;
+
+        BindExitGameButton();
+    }
 
     // ============================================================
     // DESTROY
@@ -241,6 +765,13 @@ public class MainMenuSettingsUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (masterAudioToggle != null)
+        {
+            masterAudioToggle.onValueChanged.RemoveListener(
+                OnMasterAudioToggleChanged
+            );
+        }
+
         if (musicToggle != null)
         {
             musicToggle.onValueChanged.RemoveListener(
@@ -252,6 +783,20 @@ public class MainMenuSettingsUI : MonoBehaviour
         {
             sfxToggle.onValueChanged.RemoveListener(
                 OnSFXToggleChanged
+            );
+        }
+
+        if (logoutButton != null)
+        {
+            logoutButton.onClick.RemoveListener(
+                OnLogoutButtonClicked
+            );
+        }
+
+        if (exitGameButton != null)
+        {
+            exitGameButton.onClick.RemoveListener(
+                OnExitGameButtonClicked
             );
         }
 

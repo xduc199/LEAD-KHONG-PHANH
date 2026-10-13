@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_010_Lead_10
+  m_EditorClassIdentifier: 
+  itemId: 10
+  itemName: "Lead H\u1ECFa Long"
+  description: "Lead \u0111\u1ECF \u0111en v\u1EDBi h\u1ECDa ti\u1EBFt r\u1ED3ng
+    l\u1EEDa, t\u1EA1o c\u1EA3m gi\xE1c m\u1EA1nh m\u1EBD v\xE0 t\u1ED1c \u0111\u1ED9.
+    Khi ch\u1EA1y c\xF3 th\u1EC3 d\xF9ng VFX l\u1EEDa \u1EDF b\xE1nh xe."
+  category: 0
+  subCategory: "\u0110\u1EB7c Bi\u1EC7t"
+  rarity: 3
+  icon: {fileID: 21300000, guid: de7f3e6334e37494b8f8cc1ab7ec3cfa, type: 3}
+  prefab: {fileID: 6326726421732722259, guid: d9a55db2a08560147b20b6103204b4e5, type: 3}
+  visualId: VISUAL_ITEM_010
+  purchasable: 1
+  price: 1000
+  currency: 1
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 10
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 200
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 100
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 10
+
+    , Acceleration: 8, Handling: 8, '
+  passiveDescription: "Lead H\u1ECFa Long"

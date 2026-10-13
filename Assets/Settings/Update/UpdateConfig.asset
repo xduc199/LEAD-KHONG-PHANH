@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ff16d51fd254ea4a9a0b0cb01e04e21, type: 3}
+  m_Name: UpdateConfig
+  m_EditorClassIdentifier: 
+  manifestUrl: https://raw.githubusercontent.com/xduc199/LEAD-KHONG-PHANH/main/manifest.json
+  requestTimeoutSeconds: 10
+  downloadTimeoutSeconds: 1800
+  maxManifestBytes: 65536
+  maxPackageBytes: 4294967296
+  maxReleaseNotesBytes: 8192
+  maxArchiveEntries: 50000
+  maxExpandedBytes: 8589934592
+  maxCompressionRatio: 200

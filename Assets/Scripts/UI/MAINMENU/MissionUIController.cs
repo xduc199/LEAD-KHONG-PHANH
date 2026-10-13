@@ -13,6 +13,12 @@ public class MissionUIController : MonoBehaviour
     [Header("Mission UI")]
     [SerializeField] private Transform missionList;
 
+    [SerializeField] private GameObject missionPanel;
+
+    [Header("Cancel Button")]
+    [Tooltip("Có thể để trống. Script sẽ tự tìm CancelButton.")]
+    [SerializeField] private Button cancelButton;
+
     [Header("Mission Card")]
     [Tooltip("Có thể để trống. Script sẽ tự tìm MissionCardUI có UI con để làm template.")]
     [SerializeField] private MissionCardUI missionCardPrefab;
@@ -34,8 +40,6 @@ public class MissionUIController : MonoBehaviour
 
     private Coroutine bindCoroutine;
 
-    // Card thật đang có UI đầy đủ trong MissionList.
-    // Card này được giữ lại làm template.
     private MissionCardUI templateCard;
 
 
@@ -46,12 +50,15 @@ public class MissionUIController : MonoBehaviour
     private void Awake()
     {
         AutoFindReferences();
+        BindCancelButton();
     }
 
 
     private void OnEnable()
     {
         AutoFindReferences();
+
+        BindCancelButton();
 
         StartBinding();
 
@@ -62,6 +69,8 @@ public class MissionUIController : MonoBehaviour
     private void Start()
     {
         AutoFindReferences();
+
+        BindCancelButton();
 
         StartBinding();
 
@@ -74,6 +83,8 @@ public class MissionUIController : MonoBehaviour
         StopBinding();
 
         UnsubscribeFromMissionManager();
+
+        UnbindCancelButton();
     }
 
 
@@ -82,6 +93,190 @@ public class MissionUIController : MonoBehaviour
         StopBinding();
 
         UnsubscribeFromMissionManager();
+
+        UnbindCancelButton();
+    }
+
+
+    //==============================================================
+    // CANCEL BUTTON
+    //==============================================================
+
+    private void BindCancelButton()
+    {
+        if (cancelButton == null)
+        {
+            AutoFindCancelButton();
+        }
+
+
+        if (cancelButton == null)
+        {
+            Debug.LogWarning(
+                "[MissionUIController] " +
+                "Không tìm thấy CancelButton.",
+                this
+            );
+
+            return;
+        }
+
+
+        // Tránh đăng ký OnClick nhiều lần.
+        cancelButton.onClick.RemoveListener(
+            CloseMissionPanel
+        );
+
+        cancelButton.onClick.AddListener(
+            CloseMissionPanel
+        );
+
+
+        Debug.Log(
+            "[MissionUIController] " +
+            "Đã bind CancelButton → CloseMissionPanel().",
+            cancelButton
+        );
+    }
+
+
+    private void UnbindCancelButton()
+    {
+        if (cancelButton == null)
+        {
+            return;
+        }
+
+
+        cancelButton.onClick.RemoveListener(
+            CloseMissionPanel
+        );
+    }
+
+
+    private void AutoFindCancelButton()
+    {
+        Transform target =
+            FindDeepChild(
+                transform,
+                "CancelButton"
+            );
+
+
+        if (target == null)
+        {
+            // Trường hợp CancelButton nằm ở parent.
+            Transform parent =
+                transform.parent;
+
+
+            if (parent != null)
+            {
+                target =
+                    FindDeepChild(
+                        parent,
+                        "CancelButton"
+                    );
+            }
+        }
+
+
+        if (target == null)
+        {
+            return;
+        }
+
+
+        cancelButton =
+            target.GetComponent<Button>();
+    }
+
+
+    /// <summary>
+    /// Đóng Mission Panel khi bấm Cancel.
+    /// </summary>
+    private void CloseMissionPanel()
+    {
+        // Ưu tiên MissionPanel được gán trong Inspector.
+        if (missionPanel == null)
+        {
+            AutoFindMissionPanel();
+        }
+
+
+        if (missionPanel != null)
+        {
+            missionPanel.SetActive(false);
+
+
+            Debug.Log(
+                "[MissionUIController] " +
+                "Đã đóng Mission Panel.",
+                missionPanel
+            );
+
+            return;
+        }
+
+
+        // Fallback:
+        // Nếu MissionUIController nằm trực tiếp trên MissionPanel.
+        gameObject.SetActive(false);
+
+
+        Debug.Log(
+            "[MissionUIController] " +
+            "Không tìm thấy MissionPanel → " +
+            "đã tắt GameObject chứa MissionUIController.",
+            this
+        );
+    }
+
+
+    private void AutoFindMissionPanel()
+    {
+        // Trường hợp chính:
+        // MissionUIController nằm bên trong MissionPanel.
+        Transform current =
+            transform;
+
+
+        while (current != null)
+        {
+            if (current.name == "MissionPanel")
+            {
+                missionPanel =
+                    current.gameObject;
+
+                return;
+            }
+
+
+            current =
+                current.parent;
+        }
+
+
+        // Fallback tìm trong root.
+        Transform root =
+            transform.root;
+
+
+        if (root != null)
+        {
+            Transform target =
+                FindDeepChild(
+                    root,
+                    "MissionPanel"
+                );
+
+
+            if (target != null)
+            {
+                missionPanel =
+                    target.gameObject;
+            }
+        }
     }
 
 
@@ -133,7 +328,9 @@ public class MissionUIController : MonoBehaviour
                 break;
             }
 
+
             yield return null;
+
 
             TryBindMissionManager();
 
@@ -188,7 +385,8 @@ public class MissionUIController : MonoBehaviour
 
 
         Debug.Log(
-            "[MissionUIController] Đã kết nối MissionManager.",
+            "[MissionUIController] " +
+            "Đã kết nối MissionManager.",
             this
         );
     }
@@ -224,6 +422,12 @@ public class MissionUIController : MonoBehaviour
 
     private void AutoFindReferences()
     {
+        if (missionPanel == null)
+        {
+            AutoFindMissionPanel();
+        }
+
+
         if (missionList == null)
         {
             Transform target =
@@ -231,6 +435,7 @@ public class MissionUIController : MonoBehaviour
                     transform,
                     "MissionList"
                 );
+
 
             if (target != null)
             {
@@ -248,11 +453,18 @@ public class MissionUIController : MonoBehaviour
                     "DailyResetText"
                 );
 
+
             if (target != null)
             {
                 dailyResetText =
                     target.GetComponent<TMP_Text>();
             }
+        }
+
+
+        if (cancelButton == null)
+        {
+            AutoFindCancelButton();
         }
 
 
@@ -314,8 +526,6 @@ public class MissionUIController : MonoBehaviour
         }
 
 
-        // Nếu Inspector đã có card prefab/template hợp lệ,
-        // ưu tiên dùng nó.
         if (missionCardPrefab != null &&
             HasUsableMissionCardUI(
                 missionCardPrefab
@@ -328,7 +538,6 @@ public class MissionUIController : MonoBehaviour
         }
 
 
-        // Tìm tất cả MissionCardUI trong MissionList.
         MissionCardUI[] cards =
             missionList.GetComponentsInChildren<MissionCardUI>(
                 true
@@ -352,15 +561,12 @@ public class MissionUIController : MonoBehaviour
             }
 
 
-            // Bỏ qua những clone rỗng.
             if (!HasUsableMissionCardUI(card))
             {
                 continue;
             }
 
 
-            // Nếu đây là card đang nằm trong spawnedCards
-            // thì vẫn có thể dùng làm template.
             firstUsableCard =
                 card;
 
@@ -406,7 +612,6 @@ public class MissionUIController : MonoBehaviour
         }
 
 
-        // Kiểm tra xem card có UI con thực sự hay không.
         TMP_Text[] texts =
             root.GetComponentsInChildren<TMP_Text>(
                 true
@@ -431,8 +636,6 @@ public class MissionUIController : MonoBehaviour
             );
 
 
-        // Một MissionCard hoàn chỉnh tối thiểu phải có
-        // Text + Button.
         bool hasText =
             texts != null &&
             texts.Length > 0;
@@ -499,10 +702,6 @@ public class MissionUIController : MonoBehaviour
         );
 
 
-        //==========================================================
-        // SET DATA
-        //==========================================================
-
         int count =
             Mathf.Min(
                 spawnedCards.Count,
@@ -537,10 +736,6 @@ public class MissionUIController : MonoBehaviour
             );
         }
 
-
-        //==========================================================
-        // HIDE EXTRA CARDS
-        //==========================================================
 
         for (int i = count;
              i < spawnedCards.Count;
@@ -602,10 +797,6 @@ public class MissionUIController : MonoBehaviour
         }
 
 
-        //==========================================================
-        // TÌM TEMPLATE LẦN CUỐI
-        //==========================================================
-
         FindMissionCardTemplate();
 
 
@@ -621,10 +812,6 @@ public class MissionUIController : MonoBehaviour
             return;
         }
 
-
-        //==========================================================
-        // CLONE TỪ TEMPLATE
-        //==========================================================
 
         while (
             spawnedCards.Count <
@@ -832,6 +1019,7 @@ public class MissionUIController : MonoBehaviour
             mission.CurrentProgress,
             mission.target,
             mission.expReward,
+            mission.goldReward,
             mission.IsCompleted,
             mission.claimed
         );

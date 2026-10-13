@@ -5,8 +5,11 @@ using UnityEngine;
 using Firebase.Firestore;
 using Firebase.Auth;
 
-public class FirestorePlayerDataManager : MonoBehaviour
-{
+public sealed class FirestorePlayerDataManager : MonoBehaviour
+{   
+    [Header("Item Database")]
+    [SerializeField]
+    private GameItemDatabase itemDatabase;
     // =========================================================
     // SINGLETON
     // =========================================================
@@ -49,26 +52,125 @@ public class FirestorePlayerDataManager : MonoBehaviour
     public Action<PlayerData> OnPlayerDataSaved;
 
 
+    /// <summary>
+    /// Fired exactly once when this manager becomes available.
+    ///
+    /// EquipmentManager dùng event này để xử lý trường hợp:
+    ///
+    /// EquipmentManager.Awake()
+    ///     ↓
+    /// FirestoreManager chưa tồn tại
+    ///
+    /// Sau đó:
+    ///
+    /// FirestoreManager.Awake()
+    ///     ↓
+    /// OnManagerReady
+    ///     ↓
+    /// EquipmentManager subscribe lại
+    ///
+    /// Không cần Update polling.
+    /// </summary>
+    public static event Action OnManagerReady;
+
+
+    // =========================================================
+    // EQUIPMENT DEFAULTS
+    // =========================================================
+
+    private const int DefaultVehicleItemId = 1;
+
+    private const int DefaultOutfitItemId = 41;
+
+    private const int DefaultAccessoryItemId = 0;
+
+    private const int DefaultCosmeticItemId = 0;
+
+
+    // =========================================================
+    // OWNERSHIP MIGRATION
+    // =========================================================
+
+    private const int OwnershipMigrationVersion = 3;
+
+
+    // =========================================================
+    // ITEM RANGE
+    // =========================================================
+
+    private const int VehicleMinId = 1;
+    private const int VehicleMaxId = 40;
+
+    private const int OutfitMinId = 41;
+    private const int OutfitMaxId = 60;
+
+    private const int CosmeticMinId = 61;
+    private const int CosmeticMaxId = 80;
+
+    private const int AccessoryMinId = 81;
+    private const int AccessoryMaxId = 100;
+
+
     // =========================================================
     // UNITY
     // =========================================================
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        // ---------------------------------------------------------
+        // SINGLETON
+        // ---------------------------------------------------------
+
+        if (
+            Instance != null &&
+            Instance != this
+        )
         {
             Destroy(gameObject);
             return;
         }
 
+
         Instance = this;
+
+
+        // ---------------------------------------------------------
+        // PERSIST
+        // ---------------------------------------------------------
 
         DontDestroyOnLoad(gameObject);
 
+
+        // ---------------------------------------------------------
+        // FIRESTORE
+        // ---------------------------------------------------------
+
         InitializeFirestore();
+
+
+        // ---------------------------------------------------------
+        // MANAGER READY
+        // ---------------------------------------------------------
+
+        OnManagerReady?.Invoke();
     }
 
 
+    private void OnDestroy()
+    {
+        if (Instance != this)
+        {
+            return;
+        }
+
+
+        Instance = null;
+    }
+
+    private GameItemDatabase FindGameItemDatabaseForMigration()
+{
+    return itemDatabase;
+}
     // =========================================================
     // FIRESTORE INITIALIZE
     // =========================================================
@@ -77,25 +179,31 @@ public class FirestorePlayerDataManager : MonoBehaviour
     {
         try
         {
-            db = FirebaseFirestore.DefaultInstance;
+            db =
+                FirebaseFirestore.DefaultInstance;
+
 
             if (db == null)
             {
                 Debug.LogError(
-                    "[Firestore] Không thể khởi tạo Firestore."
+                    "[Firestore] Không thể khởi tạo Firestore.",
+                    this
                 );
 
                 return;
             }
 
+
             Debug.Log(
-                "[Firestore] Initialized successfully."
+                "[Firestore] Initialized successfully.",
+                this
             );
         }
         catch (Exception exception)
         {
             Debug.LogError(
-                $"[Firestore] Initialization failed: {exception}"
+                $"[Firestore] Initialization failed: {exception}",
+                this
             );
         }
     }
@@ -111,25 +219,32 @@ public class FirestorePlayerDataManager : MonoBehaviour
         if (user == null)
         {
             Debug.LogError(
-                "[Firestore] FirebaseUser = null."
+                "[Firestore] FirebaseUser = null.",
+                this
             );
 
             return null;
         }
+
 
         if (db == null)
         {
             InitializeFirestore();
         }
 
+
         if (db == null)
         {
             return null;
         }
 
+
         IsLoading = true;
 
-        string requestedUID = user.UserId;
+
+        string requestedUID =
+            user.UserId;
+
 
         try
         {
@@ -137,34 +252,44 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 db.Collection("players")
                   .Document(requestedUID);
 
+
             DocumentSnapshot snapshot =
                 await playerRef.GetSnapshotAsync();
 
 
-            // =================================================
+            // =====================================================
             // ACCOUNT SAFETY
-            // =================================================
+            // =====================================================
 
             if (!IsSameCurrentFirebaseUser(requestedUID))
             {
                 Debug.LogWarning(
                     "[Firestore] Account đã thay đổi trong lúc load. " +
-                    "Bỏ qua dữ liệu cũ."
+                    "Bỏ qua dữ liệu cũ.",
+                    this
                 );
 
                 return null;
             }
 
 
-            // =================================================
+            // =====================================================
             // EXISTING PLAYER
-            // =================================================
+            // =====================================================
 
             if (snapshot.Exists)
             {
                 Debug.Log(
-                    $"[Firestore] Player data found: {requestedUID}"
+                    $"[Firestore] Player data found: {requestedUID}",
+                    this
                 );
+
+
+                bool requiresMigration =
+                    NeedsPlayerDataMigration(
+                        snapshot
+                    );
+
 
                 PlayerData loadedData =
                     ConvertSnapshotToPlayerData(
@@ -172,12 +297,19 @@ public class FirestorePlayerDataManager : MonoBehaviour
                         requestedUID
                     );
 
+
                 CurrentPlayerData =
                     loadedData;
+
+
+                // =================================================
+                // EVENT
+                // =================================================
 
                 OnPlayerDataLoaded?.Invoke(
                     CurrentPlayerData
                 );
+
 
                 Debug.Log(
                     $"[Firestore] Account loaded: " +
@@ -185,35 +317,88 @@ public class FirestorePlayerDataManager : MonoBehaviour
                     $"Level {CurrentPlayerData.level} | " +
                     $"EXP {CurrentPlayerData.exp} | " +
                     $"Coins {CurrentPlayerData.coins} | " +
+                    $"Gems {CurrentPlayerData.gems} | " +
                     $"BestScore {CurrentPlayerData.bestScore} | " +
+                    $"TotalRuns {CurrentPlayerData.totalRuns} | " +
                     $"GumLv {CurrentPlayerData.gumUpgradeLevel} | " +
                     $"PhotonLv {CurrentPlayerData.photonUpgradeLevel} | " +
                     $"ShieldLv {CurrentPlayerData.shieldUpgradeLevel} | " +
                     $"MagnetLv {CurrentPlayerData.magnetUpgradeLevel} | " +
-                    $"MissionDate {CurrentPlayerData.missionDate}"
+                    $"OwnedItems {CurrentPlayerData.ownedItemIds.Count} | " +
+                    $"Vehicle {CurrentPlayerData.equippedVehicleItemId} | " +
+                    $"Outfit {CurrentPlayerData.equippedOutfitItemId} | " +
+                    $"Accessory {CurrentPlayerData.equippedAccessoryItemId} | " +
+                    $"Cosmetic {CurrentPlayerData.equippedCosmeticItemId} | " +
+                    $"MissionDate {CurrentPlayerData.missionDate}",
+                    this
                 );
 
+
                 // =================================================
-                // LEADERBOARD SYNC
+                // PERSIST MIGRATION
+                // =================================================
+
+                if (requiresMigration)
+                {
+                    Debug.Log(
+                        "[Firestore] Legacy player data detected. " +
+                        "Running equipment migration.",
+                        this
+                    );
+
+
+                    bool migrationSaved =
+                        await SavePlayerDataAsync();
+
+
+                    if (migrationSaved)
+                    {
+                        Debug.Log(
+                            "[Firestore] Equipment migration completed. " +
+                            $"Vehicle={CurrentPlayerData.equippedVehicleItemId} | " +
+                            $"Outfit={CurrentPlayerData.equippedOutfitItemId} | " +
+                            $"Accessory={CurrentPlayerData.equippedAccessoryItemId} | " +
+                            $"Cosmetic={CurrentPlayerData.equippedCosmeticItemId}",
+                            this
+                        );
+                    }
+                    else
+                    {
+                        Debug.LogWarning(
+                            "[Firestore] Equipment migration could not be persisted. " +
+                            "Runtime data remains normalized.",
+                            this
+                        );
+                    }
+                }
+
+
+                // =================================================
+                // LEADERBOARD
                 // =================================================
 
                 await SyncCurrentPlayerLeaderboardAsync();
+
 
                 return CurrentPlayerData;
             }
 
 
-            // =================================================
+            // =====================================================
             // NEW PLAYER
-            // =================================================
+            // =====================================================
 
             Debug.Log(
                 $"[Firestore] Player data not found. " +
-                $"Creating: {requestedUID}"
+                $"Creating: {requestedUID}",
+                this
             );
 
+
             PlayerData newPlayer =
-                CreateDefaultPlayerData(user);
+                CreateDefaultPlayerData(
+                    user
+                );
 
 
             Dictionary<string, object> data =
@@ -225,12 +410,16 @@ public class FirestorePlayerDataManager : MonoBehaviour
             await playerRef.SetAsync(data);
 
 
-            // Account có thể đã logout trong lúc await.
+            // =====================================================
+            // ACCOUNT SAFETY AFTER AWAIT
+            // =====================================================
+
             if (!IsSameCurrentFirebaseUser(requestedUID))
             {
                 Debug.LogWarning(
                     "[Firestore] Account đã thay đổi sau khi tạo data. " +
-                    "Không set CurrentPlayerData."
+                    "Không set CurrentPlayerData.",
+                    this
                 );
 
                 return null;
@@ -240,26 +429,34 @@ public class FirestorePlayerDataManager : MonoBehaviour
             CurrentPlayerData =
                 newPlayer;
 
+
             OnPlayerDataLoaded?.Invoke(
                 CurrentPlayerData
             );
 
+
             Debug.Log(
-                $"[Firestore] Player data created: {requestedUID}"
+                $"[Firestore] Player data created: {requestedUID} | " +
+                $"Vehicle={CurrentPlayerData.equippedVehicleItemId} | " +
+                $"Outfit={CurrentPlayerData.equippedOutfitItemId}",
+                this
             );
 
-            // =================================================
-            // LEADERBOARD SYNC FOR NEW PLAYER
-            // =================================================
+
+            // =====================================================
+            // LEADERBOARD
+            // =====================================================
 
             await SyncCurrentPlayerLeaderboardAsync();
+
 
             return CurrentPlayerData;
         }
         catch (Exception exception)
         {
             Debug.LogError(
-                $"[Firestore] Create/Load failed: {exception}"
+                $"[Firestore] Create/Load failed: {exception}",
+                this
             );
 
             return null;
@@ -279,15 +476,22 @@ public class FirestorePlayerDataManager : MonoBehaviour
         string uid)
     {
         if (string.IsNullOrEmpty(uid))
+        {
             return false;
+        }
+
 
         FirebaseUser currentUser =
             FirebaseAuthManager.Instance != null
                 ? FirebaseAuthManager.Instance.CurrentUser
                 : null;
 
+
         if (currentUser == null)
+        {
             return false;
+        }
+
 
         return currentUser.UserId == uid;
     }
@@ -302,24 +506,29 @@ public class FirestorePlayerDataManager : MonoBehaviour
         PlayerData dataToSave =
             CurrentPlayerData;
 
+
         if (dataToSave == null)
         {
             Debug.LogError(
-                "[Firestore] Không có CurrentPlayerData."
+                "[Firestore] Không có CurrentPlayerData.",
+                this
             );
 
             return false;
         }
+
 
         FirebaseUser user =
             FirebaseAuthManager.Instance != null
                 ? FirebaseAuthManager.Instance.CurrentUser
                 : null;
 
+
         if (user == null)
         {
             Debug.LogError(
-                "[Firestore] Không có FirebaseUser đang đăng nhập."
+                "[Firestore] Không có FirebaseUser đang đăng nhập.",
+                this
             );
 
             return false;
@@ -338,7 +547,8 @@ public class FirestorePlayerDataManager : MonoBehaviour
         {
             Debug.LogError(
                 "[Firestore] UID mismatch. " +
-                "Không save dữ liệu của account khác."
+                "Không save dữ liệu của account khác.",
+                this
             );
 
             return false;
@@ -350,6 +560,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
             InitializeFirestore();
         }
 
+
         if (db == null)
         {
             return false;
@@ -358,6 +569,11 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
         try
         {
+            NormalizePlayerDataInPlace(
+                dataToSave
+            );
+
+
             DocumentReference playerRef =
                 db.Collection("players")
                   .Document(uid);
@@ -375,7 +591,10 @@ public class FirestorePlayerDataManager : MonoBehaviour
             );
 
 
-            // Không phát event cho account khác.
+            // =================================================
+            // ACCOUNT SAFETY
+            // =================================================
+
             if (
                 CurrentPlayerData == dataToSave &&
                 CurrentPlayerUID == uid
@@ -388,15 +607,18 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
             Debug.Log(
-                $"[Firestore] Player data saved: {uid}"
+                $"[Firestore] Player data saved: {uid}",
+                this
             );
+
 
             return true;
         }
         catch (Exception exception)
         {
             Debug.LogError(
-                $"[Firestore] Save failed: {exception}"
+                $"[Firestore] Save failed: {exception}",
+                this
             );
 
             return false;
@@ -405,7 +627,75 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
     // =========================================================
-    // SAVE ONLY MISSION DATA
+    // TOTAL RUNS
+    // =========================================================
+
+    public async Task<bool> IncrementTotalRunsAsync()
+    {
+        if (CurrentPlayerData == null)
+        {
+            Debug.LogWarning(
+                "[Firestore] Không có CurrentPlayerData " +
+                "để tăng TotalRuns.",
+                this
+            );
+
+            return false;
+        }
+
+
+        if (
+            CurrentPlayerData.totalRuns <
+            int.MaxValue
+        )
+        {
+            CurrentPlayerData.totalRuns++;
+        }
+        else
+        {
+            CurrentPlayerData.totalRuns =
+                int.MaxValue;
+        }
+
+
+        Debug.Log(
+            $"[Firestore] TotalRuns = " +
+            $"{CurrentPlayerData.totalRuns}",
+            this
+        );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    public async Task<bool> SetTotalRunsAsync(
+        int totalRuns)
+    {
+        if (CurrentPlayerData == null)
+        {
+            Debug.LogError(
+                "[Firestore] Không có player data.",
+                this
+            );
+
+            return false;
+        }
+
+
+        CurrentPlayerData.totalRuns =
+            Mathf.Max(
+                0,
+                totalRuns
+            );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    // =========================================================
+    // MISSION
     // =========================================================
 
     public async Task<bool> SaveMissionDataAsync()
@@ -413,11 +703,13 @@ public class FirestorePlayerDataManager : MonoBehaviour
         PlayerData dataToSave =
             CurrentPlayerData;
 
+
         if (dataToSave == null)
         {
             Debug.LogWarning(
                 "[Firestore] Không có CurrentPlayerData " +
-                "để save Mission."
+                "để save Mission.",
+                this
             );
 
             return false;
@@ -434,7 +726,8 @@ public class FirestorePlayerDataManager : MonoBehaviour
         {
             Debug.LogWarning(
                 "[Firestore] Không có FirebaseUser " +
-                "để save Mission."
+                "để save Mission.",
+                this
             );
 
             return false;
@@ -445,14 +738,11 @@ public class FirestorePlayerDataManager : MonoBehaviour
             user.UserId;
 
 
-        // =====================================================
-        // UID SAFETY
-        // =====================================================
-
         if (dataToSave.uid != uid)
         {
             Debug.LogError(
-                "[Firestore] Mission save UID mismatch."
+                "[Firestore] Mission save UID mismatch.",
+                this
             );
 
             return false;
@@ -463,6 +753,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
         {
             InitializeFirestore();
         }
+
 
         if (db == null)
         {
@@ -483,8 +774,6 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 );
 
 
-            // Chỉ Merge các field Mission.
-            // Không đụng coins / exp / level / bike...
             await playerRef.SetAsync(
                 missionData,
                 SetOptions.MergeAll
@@ -492,15 +781,18 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
             Debug.Log(
-                $"[Firestore] Mission data saved: {uid}"
+                $"[Firestore] Mission data saved: {uid}",
+                this
             );
+
 
             return true;
         }
         catch (Exception exception)
         {
             Debug.LogError(
-                $"[Firestore] Mission save failed: {exception}"
+                $"[Firestore] Mission save failed: {exception}",
+                this
             );
 
             return false;
@@ -519,29 +811,27 @@ public class FirestorePlayerDataManager : MonoBehaviour
         if (CurrentPlayerData == null)
         {
             Debug.LogError(
-                "[Firestore] Không có player data."
+                "[Firestore] Không có player data.",
+                this
             );
 
             return false;
         }
 
-        level =
+
+        CurrentPlayerData.level =
             Mathf.Max(
                 1,
                 level
             );
 
-        exp =
+
+        CurrentPlayerData.exp =
             Mathf.Max(
                 0,
                 exp
             );
 
-        CurrentPlayerData.level =
-            level;
-
-        CurrentPlayerData.exp =
-            exp;
 
         return await SavePlayerDataAsync();
     }
@@ -557,24 +847,34 @@ public class FirestorePlayerDataManager : MonoBehaviour
         if (CurrentPlayerData == null)
         {
             Debug.LogError(
-                "[Firestore] Không có player data."
+                "[Firestore] Không có player data.",
+                this
             );
 
             return false;
         }
 
-        int newCoins =
-            CurrentPlayerData.coins +
+
+        long calculatedCoins =
+            (long)CurrentPlayerData.coins +
             amount;
 
-        newCoins =
-            Mathf.Max(
-                0,
-                newCoins
-            );
+
+        if (calculatedCoins < 0)
+        {
+            calculatedCoins = 0;
+        }
+
+
+        if (calculatedCoins > int.MaxValue)
+        {
+            calculatedCoins = int.MaxValue;
+        }
+
 
         CurrentPlayerData.coins =
-            newCoins;
+            (int)calculatedCoins;
+
 
         return await SavePlayerDataAsync();
     }
@@ -586,17 +886,88 @@ public class FirestorePlayerDataManager : MonoBehaviour
         if (CurrentPlayerData == null)
         {
             Debug.LogError(
-                "[Firestore] Không có player data."
+                "[Firestore] Không có player data.",
+                this
             );
 
             return false;
         }
+
 
         CurrentPlayerData.coins =
             Mathf.Max(
                 0,
                 coins
             );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    // =========================================================
+    // GEMS
+    // =========================================================
+
+    public async Task<bool> AddGemsAsync(
+        int amount)
+    {
+        if (CurrentPlayerData == null)
+        {
+            Debug.LogError(
+                "[Firestore] Không có player data.",
+                this
+            );
+
+            return false;
+        }
+
+
+        long calculatedGems =
+            (long)CurrentPlayerData.gems +
+            amount;
+
+
+        if (calculatedGems < 0)
+        {
+            calculatedGems = 0;
+        }
+
+
+        if (calculatedGems > int.MaxValue)
+        {
+            calculatedGems = int.MaxValue;
+        }
+
+
+        CurrentPlayerData.gems =
+            (int)calculatedGems;
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    public async Task<bool> SetGemsAsync(
+        int gems)
+    {
+        if (CurrentPlayerData == null)
+        {
+            Debug.LogError(
+                "[Firestore] Không có player data.",
+                this
+            );
+
+            return false;
+        }
+
+
+        CurrentPlayerData.gems =
+            Mathf.Max(
+                0,
+                gems
+            );
+
 
         return await SavePlayerDataAsync();
     }
@@ -612,17 +983,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
         if (CurrentPlayerData == null)
         {
             Debug.LogError(
-                "[Firestore] Không có player data."
+                "[Firestore] Không có player data.",
+                this
             );
 
             return false;
         }
+
 
         score =
             Mathf.Max(
                 0,
                 score
             );
+
 
         if (
             score <=
@@ -632,20 +1006,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
             return true;
         }
 
+
         CurrentPlayerData.bestScore =
             score;
 
+
         bool playerSaved =
             await SavePlayerDataAsync();
+
 
         if (!playerSaved)
         {
             return false;
         }
 
-        // =====================================================
-        // SYNC LEADERBOARD IMMEDIATELY
-        // =====================================================
 
         return await SaveLeaderboardBestScoreAsync(
             CurrentPlayerData.bestScore
@@ -663,52 +1037,57 @@ public class FirestorePlayerDataManager : MonoBehaviour
         PlayerData dataToSave =
             CurrentPlayerData;
 
+
         if (dataToSave == null)
         {
             Debug.LogError(
                 "[Firestore] Không có CurrentPlayerData " +
-                "để save Leaderboard."
+                "để save Leaderboard.",
+                this
             );
 
             return false;
         }
+
 
         FirebaseUser user =
             FirebaseAuthManager.Instance != null
                 ? FirebaseAuthManager.Instance.CurrentUser
                 : null;
 
+
         if (user == null)
         {
             Debug.LogError(
                 "[Firestore] Không có FirebaseUser " +
-                "đang đăng nhập để save Leaderboard."
+                "đang đăng nhập để save Leaderboard.",
+                this
             );
 
             return false;
         }
+
 
         string uid =
             user.UserId;
 
+
         if (string.IsNullOrEmpty(uid))
         {
-            Debug.LogError(
-                "[Firestore] Leaderboard UID không hợp lệ."
-            );
-
             return false;
         }
+
 
         if (dataToSave.uid != uid)
         {
             Debug.LogError(
-                "[Firestore] Leaderboard UID mismatch. " +
-                "Không save dữ liệu của account khác."
+                "[Firestore] Leaderboard UID mismatch.",
+                this
             );
 
             return false;
         }
+
 
         bestScore =
             Mathf.Max(
@@ -716,15 +1095,18 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 bestScore
             );
 
+
         if (db == null)
         {
             InitializeFirestore();
         }
 
+
         if (db == null)
         {
             return false;
         }
+
 
         try
         {
@@ -732,13 +1114,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 db.Collection("leaderboard")
                   .Document(uid);
 
+
             DocumentSnapshot existingSnapshot =
                 await leaderboardRef.GetSnapshotAsync();
 
+
             int existingBestScore = 0;
 
-            if (existingSnapshot.Exists &&
-                existingSnapshot.ContainsField("bestScore"))
+
+            if (
+                existingSnapshot.Exists &&
+                existingSnapshot.ContainsField(
+                    "bestScore"
+                )
+            )
             {
                 existingBestScore =
                     GetInt(
@@ -747,6 +1136,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
                         0
                     );
 
+
                 existingBestScore =
                     Mathf.Max(
                         0,
@@ -754,52 +1144,61 @@ public class FirestorePlayerDataManager : MonoBehaviour
                     );
             }
 
-            // Không bao giờ làm leaderboard tụt điểm.
-            if (existingBestScore > bestScore)
+
+            if (
+                existingBestScore >
+                bestScore
+            )
             {
                 bestScore =
                     existingBestScore;
             }
 
-            Dictionary<string, object> leaderboardData =
-                new Dictionary<string, object>
-                {
-                    {
-                        "uid",
-                        uid
-                    },
 
+            Dictionary<string, object>
+                leaderboardData =
+                    new Dictionary<string, object>
                     {
-                        "displayName",
-                        string.IsNullOrEmpty(
-                            dataToSave.displayName
-                        )
-                            ? "Player"
-                            : dataToSave.displayName
-                    },
+                        {
+                            "uid",
+                            uid
+                        },
 
-                    {
-                        "bestScore",
-                        bestScore
-                    },
+                        {
+                            "displayName",
+                            string.IsNullOrEmpty(
+                                dataToSave.displayName
+                            )
+                                ? "Player"
+                                : dataToSave.displayName
+                        },
 
-                    {
-                        "updatedAt",
-                        FieldValue.ServerTimestamp
-                    }
-                };
+                        {
+                            "bestScore",
+                            bestScore
+                        },
+
+                        {
+                            "updatedAt",
+                            FieldValue.ServerTimestamp
+                        }
+                    };
+
 
             await leaderboardRef.SetAsync(
                 leaderboardData,
                 SetOptions.MergeAll
             );
 
+
             Debug.Log(
                 $"[Firestore] Leaderboard updated: " +
                 $"{uid} | " +
                 $"{dataToSave.displayName} | " +
-                $"BestScore {bestScore}"
+                $"BestScore {bestScore}",
+                this
             );
+
 
             return true;
         }
@@ -807,7 +1206,8 @@ public class FirestorePlayerDataManager : MonoBehaviour
         {
             Debug.LogError(
                 $"[Firestore] Leaderboard save failed: " +
-                $"{exception}"
+                $"{exception}",
+                this
             );
 
             return false;
@@ -816,7 +1216,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
     // =========================================================
-    // SYNC CURRENT PLAYER → LEADERBOARD
+    // SYNC LEADERBOARD
     // =========================================================
 
     public async Task<bool> SyncCurrentPlayerLeaderboardAsync()
@@ -824,57 +1224,37 @@ public class FirestorePlayerDataManager : MonoBehaviour
         PlayerData data =
             CurrentPlayerData;
 
+
         if (data == null)
         {
-            Debug.LogWarning(
-                "[Firestore] Không có CurrentPlayerData " +
-                "để sync Leaderboard."
-            );
-
             return false;
         }
+
 
         FirebaseUser user =
             FirebaseAuthManager.Instance != null
                 ? FirebaseAuthManager.Instance.CurrentUser
                 : null;
 
+
         if (user == null)
         {
-            Debug.LogWarning(
-                "[Firestore] Không có FirebaseUser " +
-                "để sync Leaderboard."
-            );
-
             return false;
         }
+
 
         string uid =
             user.UserId;
 
-        if (string.IsNullOrEmpty(uid))
-        {
-            Debug.LogError(
-                "[Firestore] Không thể sync Leaderboard: UID rỗng."
-            );
 
+        if (
+            string.IsNullOrEmpty(uid) ||
+            data.uid != uid
+        )
+        {
             return false;
         }
 
-        if (data.uid != uid)
-        {
-            Debug.LogError(
-                "[Firestore] Leaderboard sync UID mismatch."
-            );
-
-            return false;
-        }
-
-        Debug.Log(
-            $"[Firestore] Syncing Leaderboard: " +
-            $"{data.displayName} | " +
-            $"BestScore {data.bestScore}"
-        );
 
         return await SaveLeaderboardBestScoreAsync(
             data.bestScore
@@ -891,21 +1271,15 @@ public class FirestorePlayerDataManager : MonoBehaviour
     {
         if (CurrentPlayerData == null)
         {
-            Debug.LogError(
-                "[Firestore] Không có player data."
-            );
-
             return false;
         }
+
 
         if (string.IsNullOrWhiteSpace(bikeId))
         {
-            Debug.LogError(
-                "[Firestore] bikeId không hợp lệ."
-            );
-
             return false;
         }
+
 
         if (
             CurrentPlayerData.ownedBikes == null ||
@@ -915,14 +1289,17 @@ public class FirestorePlayerDataManager : MonoBehaviour
         )
         {
             Debug.LogWarning(
-                $"[Firestore] Bike chưa sở hữu: {bikeId}"
+                $"[Firestore] Bike chưa sở hữu: {bikeId}",
+                this
             );
 
             return false;
         }
 
+
         CurrentPlayerData.selectedBike =
             bikeId;
+
 
         return await SavePlayerDataAsync();
     }
@@ -937,27 +1314,22 @@ public class FirestorePlayerDataManager : MonoBehaviour
     {
         if (CurrentPlayerData == null)
         {
-            Debug.LogError(
-                "[Firestore] Không có player data."
-            );
-
             return false;
         }
+
 
         if (string.IsNullOrWhiteSpace(bikeId))
         {
-            Debug.LogError(
-                "[Firestore] bikeId không hợp lệ."
-            );
-
             return false;
         }
+
 
         if (CurrentPlayerData.ownedBikes == null)
         {
             CurrentPlayerData.ownedBikes =
                 new List<string>();
         }
+
 
         if (
             !CurrentPlayerData.ownedBikes.Contains(
@@ -969,6 +1341,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 bikeId
             );
         }
+
 
         return await SavePlayerDataAsync();
     }
@@ -985,6 +1358,7 @@ public class FirestorePlayerDataManager : MonoBehaviour
             return false;
         }
 
+
         return CurrentPlayerData.ownedBikes.Contains(
             bikeId
         );
@@ -992,7 +1366,303 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
     // =========================================================
-    // DEFAULT DATA
+    // SHOP / INVENTORY
+    // =========================================================
+
+    public bool OwnsItem(
+        int itemId)
+    {
+        if (
+            CurrentPlayerData == null ||
+            CurrentPlayerData.ownedItemIds == null
+        )
+        {
+            return false;
+        }
+
+
+        return CurrentPlayerData.ownedItemIds.Contains(
+            itemId
+        );
+    }
+
+
+    public async Task<bool> AddOwnedItemAsync(
+        int itemId)
+    {
+        if (CurrentPlayerData == null)
+        {
+            return false;
+        }
+
+
+        if (!IsValidShopItemId(itemId))
+        {
+            Debug.LogWarning(
+                $"[Firestore] Shop item ID không hợp lệ: {itemId}",
+                this
+            );
+
+            return false;
+        }
+
+
+        if (CurrentPlayerData.ownedItemIds == null)
+        {
+            CurrentPlayerData.ownedItemIds =
+                new List<int>();
+        }
+
+
+        if (
+            !CurrentPlayerData.ownedItemIds.Contains(
+                itemId
+            )
+        )
+        {
+            CurrentPlayerData.ownedItemIds.Add(
+                itemId
+            );
+        }
+
+
+        EnsureDefaultOutfitOwnership(
+            CurrentPlayerData
+        );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    public async Task<bool> RemoveOwnedItemAsync(
+        int itemId)
+    {
+        if (CurrentPlayerData == null)
+        {
+            return false;
+        }
+
+
+        if (itemId == ResolveDefaultItemId(
+                GameItemCategory.Outfit,
+                DefaultOutfitItemId))
+        {
+            Debug.LogWarning(
+                $"[Firestore] Không thể xóa Outfit mặc định {DefaultOutfitItemId}.",
+                this
+            );
+
+            return false;
+        }
+
+
+        if (CurrentPlayerData.ownedItemIds == null)
+        {
+            CurrentPlayerData.ownedItemIds =
+                new List<int>();
+        }
+
+
+        bool removed =
+            CurrentPlayerData.ownedItemIds.Remove(
+                itemId
+            );
+
+
+        if (!removed)
+        {
+            return true;
+        }
+
+
+        EnsureDefaultOutfitOwnership(
+            CurrentPlayerData
+        );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    public async Task<bool> SetOwnedItemsAsync(
+        List<int> itemIds)
+    {
+        if (CurrentPlayerData == null)
+        {
+            return false;
+        }
+
+
+        if (CurrentPlayerData.ownedItemIds == null)
+        {
+            CurrentPlayerData.ownedItemIds =
+                new List<int>();
+        }
+        else
+        {
+            CurrentPlayerData.ownedItemIds.Clear();
+        }
+
+
+        if (itemIds != null)
+        {
+            for (
+                int i = 0;
+                i < itemIds.Count;
+                i++
+            )
+            {
+                int itemId =
+                    itemIds[i];
+
+
+                if (!IsValidShopItemId(itemId))
+                {
+                    continue;
+                }
+
+
+                if (
+                    !CurrentPlayerData.ownedItemIds.Contains(
+                        itemId
+                    )
+                )
+                {
+                    CurrentPlayerData.ownedItemIds.Add(
+                        itemId
+                    );
+                }
+            }
+        }
+
+
+        EnsureDefaultOutfitOwnership(
+            CurrentPlayerData
+        );
+
+
+        return await SavePlayerDataAsync();
+    }
+
+
+    private bool IsValidShopItemId(
+        int itemId)
+    {
+        return itemId >= GameItemDatabase.MinItemId &&
+               itemId <= GameItemDatabase.MaxItemId;
+    }
+
+
+    // =========================================================
+    // ITEM CATEGORY VALIDATION
+    // =========================================================
+
+    private bool TryGetItemCategory(
+        int itemId,
+        out GameItemCategory category)
+    {
+        category = default;
+
+        if (itemId < GameItemDatabase.MinItemId ||
+            itemId > GameItemDatabase.MaxItemId)
+        {
+            return false;
+        }
+
+        if (itemDatabase == null)
+        {
+            return false;
+        }
+
+        GameItemData item;
+
+        if (!itemDatabase.TryGet(
+                itemId,
+                out item) ||
+            item == null)
+        {
+            return false;
+        }
+
+        category = item.Category;
+        return true;
+    }
+
+
+    private bool IsItemInCategory(
+        int itemId,
+        GameItemCategory expectedCategory)
+    {
+        GameItemCategory actualCategory;
+
+        if (TryGetItemCategory(
+                itemId,
+                out actualCategory))
+        {
+            return actualCategory == expectedCategory;
+        }
+
+        // Database reference is optional at runtime.
+        // Preserve the established global-ID contract as a fallback.
+        switch (expectedCategory)
+        {
+            case GameItemCategory.Vehicle:
+                return itemId >= VehicleMinId &&
+                       itemId <= VehicleMaxId;
+
+            case GameItemCategory.Outfit:
+                return itemId >= OutfitMinId &&
+                       itemId <= OutfitMaxId;
+
+            case GameItemCategory.Cosmetic:
+                return itemId >= CosmeticMinId &&
+                       itemId <= CosmeticMaxId;
+
+            case GameItemCategory.Accessory:
+                return itemId >= AccessoryMinId &&
+                       itemId <= AccessoryMaxId;
+
+            default:
+                return false;
+        }
+    }
+
+
+    private int ResolveDefaultItemId(
+        GameItemCategory category,
+        int configuredDefaultId)
+    {
+        if (IsItemInCategory(
+                configuredDefaultId,
+                category))
+        {
+            return configuredDefaultId;
+        }
+
+        // Keep the existing global-ID contract as the final fallback.
+        switch (category)
+        {
+            case GameItemCategory.Vehicle:
+                return DefaultVehicleItemId;
+
+            case GameItemCategory.Outfit:
+                return DefaultOutfitItemId;
+
+            case GameItemCategory.Accessory:
+                return DefaultAccessoryItemId;
+
+            case GameItemCategory.Cosmetic:
+                return DefaultCosmeticItemId;
+
+            default:
+                return configuredDefaultId;
+        }
+    }
+
+
+    // =========================================================
+    // DEFAULT PLAYER
     // =========================================================
 
     private PlayerData CreateDefaultPlayerData(
@@ -1032,13 +1702,70 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
         // =====================================================
-        // ITEM UPGRADE DEFAULT
+        // RUN
+        // =====================================================
+
+        data.totalRuns =
+            0;
+
+
+        // =====================================================
+        // UPGRADES
         // =====================================================
 
         data.gumUpgradeLevel = 1;
+
         data.photonUpgradeLevel = 1;
+
         data.shieldUpgradeLevel = 1;
+
         data.magnetUpgradeLevel = 1;
+
+
+        // =====================================================
+        // ECONOMY
+        // =====================================================
+
+        data.coins = 0;
+
+        data.gems = 0;
+
+
+        // =====================================================
+        // EQUIPMENT
+        // =====================================================
+
+        data.equippedVehicleItemId =
+            ResolveDefaultItemId(
+                GameItemCategory.Vehicle,
+                DefaultVehicleItemId);
+
+        data.equippedOutfitItemId =
+            ResolveDefaultItemId(
+                GameItemCategory.Outfit,
+                DefaultOutfitItemId);
+
+        data.equippedAccessoryItemId =
+            DefaultAccessoryItemId;
+
+        data.equippedCosmeticItemId =
+            DefaultCosmeticItemId;
+
+
+        // =====================================================
+        // OWNED ITEMS
+        // =====================================================
+
+        if (data.ownedItemIds == null)
+        {
+            data.ownedItemIds =
+                new List<int>();
+        }
+
+
+        EnsureDefaultOutfitOwnership(
+            data
+        );
 
 
         return data;
@@ -1053,13 +1780,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
         ConvertPlayerDataToDictionary(
             PlayerData data)
     {
+        if (data == null)
+        {
+            return new Dictionary<string, object>();
+        }
+
+
+        NormalizePlayerDataInPlace(
+            data
+        );
+
+
         Dictionary<string, object> result =
             new Dictionary<string, object>
             {
-                // -------------------------------------------------
-                // ACCOUNT
-                // -------------------------------------------------
-
                 {
                     "uid",
                     data.uid ?? string.Empty
@@ -1069,11 +1803,6 @@ public class FirestorePlayerDataManager : MonoBehaviour
                     "displayName",
                     data.displayName ?? string.Empty
                 },
-
-
-                // -------------------------------------------------
-                // PROGRESSION
-                // -------------------------------------------------
 
                 {
                     "level",
@@ -1091,10 +1820,13 @@ public class FirestorePlayerDataManager : MonoBehaviour
                     )
                 },
 
-
-                // -------------------------------------------------
-                // ECONOMY
-                // -------------------------------------------------
+                {
+                    "totalRuns",
+                    Mathf.Max(
+                        0,
+                        data.totalRuns
+                    )
+                },
 
                 {
                     "coins",
@@ -1105,17 +1837,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
                 },
 
                 {
+                    "gems",
+                    Mathf.Max(
+                        0,
+                        data.gems
+                    )
+                },
+
+                {
                     "bestScore",
                     Mathf.Max(
                         0,
                         data.bestScore
                     )
                 },
-
-
-                // -------------------------------------------------
-                // BIKE
-                // -------------------------------------------------
 
                 {
                     "selectedBike",
@@ -1129,10 +1864,37 @@ public class FirestorePlayerDataManager : MonoBehaviour
                     new List<string>()
                 },
 
+                {
+                    "ownedItemIds",
+                    SanitizeOwnedItemIds(
+                        data.ownedItemIds
+                    )
+                },
 
-                // -------------------------------------------------
-                // ITEM UPGRADES
-                // -------------------------------------------------
+                {
+                    "ownershipMigrationVersion",
+                    OwnershipMigrationVersion
+                },
+
+                {
+                    "equippedVehicleItemId",
+                    data.equippedVehicleItemId
+                },
+
+                {
+                    "equippedOutfitItemId",
+                    data.equippedOutfitItemId
+                },
+
+                {
+                    "equippedAccessoryItemId",
+                    data.equippedAccessoryItemId
+                },
+
+                {
+                    "equippedCosmeticItemId",
+                    data.equippedCosmeticItemId
+                },
 
                 {
                     "gumUpgradeLevel",
@@ -1189,6 +1951,649 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
     // =========================================================
+    // NORMALIZE PLAYER DATA
+    // =========================================================
+
+    private void NormalizePlayerDataInPlace(
+        PlayerData data)
+    {
+        if (data == null)
+        {
+            return;
+        }
+
+
+        // -----------------------------------------------------
+        // BASIC
+        // -----------------------------------------------------
+
+        data.level =
+            Mathf.Max(
+                1,
+                data.level
+            );
+
+
+        data.exp =
+            Mathf.Max(
+                0,
+                data.exp
+            );
+
+
+        data.totalRuns =
+            Mathf.Max(
+                0,
+                data.totalRuns
+            );
+
+
+        data.coins =
+            Mathf.Max(
+                0,
+                data.coins
+            );
+
+
+        data.gems =
+            Mathf.Max(
+                0,
+                data.gems
+            );
+
+
+        data.bestScore =
+            Mathf.Max(
+                0,
+                data.bestScore
+            );
+
+
+        // -----------------------------------------------------
+        // EQUIPMENT
+        // -----------------------------------------------------
+
+        data.equippedVehicleItemId =
+            NormalizeVehicleId(
+                data.equippedVehicleItemId
+            );
+
+
+        data.equippedOutfitItemId =
+            NormalizeOutfitId(
+                data.equippedOutfitItemId
+            );
+
+
+        data.equippedAccessoryItemId =
+            NormalizeAccessoryId(
+                data.equippedAccessoryItemId
+            );
+
+
+        data.equippedCosmeticItemId =
+            NormalizeCosmeticId(
+                data.equippedCosmeticItemId
+            );
+
+
+        // -----------------------------------------------------
+        // OWNERSHIP
+        // -----------------------------------------------------
+
+        NormalizeItemOwnership(
+            data
+        );
+
+
+        // -----------------------------------------------------
+        // UPGRADE
+        // -----------------------------------------------------
+
+        data.gumUpgradeLevel =
+            Mathf.Max(
+                1,
+                data.gumUpgradeLevel
+            );
+
+
+        data.photonUpgradeLevel =
+            Mathf.Max(
+                1,
+                data.photonUpgradeLevel
+            );
+
+
+        data.shieldUpgradeLevel =
+            Mathf.Max(
+                1,
+                data.shieldUpgradeLevel
+            );
+
+
+        data.magnetUpgradeLevel =
+            Mathf.Max(
+                1,
+                data.magnetUpgradeLevel
+            );
+
+
+        // -----------------------------------------------------
+        // MISSION
+        // -----------------------------------------------------
+
+        data.missionDailyCoins =
+            Mathf.Max(
+                0,
+                data.missionDailyCoins
+            );
+
+
+        data.missionDailyDistance =
+            Mathf.Max(
+                0,
+                data.missionDailyDistance
+            );
+
+
+        data.missionDailyRuns =
+            Mathf.Max(
+                0,
+                data.missionDailyRuns
+            );
+
+
+        data.missionDailyExp =
+            Mathf.Max(
+                0,
+                data.missionDailyExp
+            );
+
+
+        data.missionPreviousTotalExp =
+            Mathf.Max(
+                0,
+                data.missionPreviousTotalExp
+            );
+
+
+        // -----------------------------------------------------
+        // BIKE
+        // -----------------------------------------------------
+
+        if (
+            string.IsNullOrWhiteSpace(
+                data.selectedBike
+            )
+        )
+        {
+            data.selectedBike =
+                "NinjaLead";
+        }
+    }
+
+
+    // =========================================================
+    // ITEM OWNERSHIP NORMALIZATION
+    // =========================================================
+
+    private void NormalizeItemOwnership(
+        PlayerData data)
+    {
+        if (data == null)
+        {
+            return;
+        }
+
+
+        if (data.ownedItemIds == null)
+        {
+            data.ownedItemIds =
+                new List<int>();
+        }
+
+
+        data.ownedItemIds =
+            SanitizeOwnedItemIds(
+                data.ownedItemIds
+            );
+
+
+        // -----------------------------------------------------
+        // EQUIPPED VEHICLE MUST BE OWNED
+        // -----------------------------------------------------
+
+        if (
+            !data.ownedItemIds.Contains(
+                data.equippedVehicleItemId
+            )
+        )
+        {
+            data.ownedItemIds.Add(
+                data.equippedVehicleItemId
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // EQUIPPED OUTFIT MUST BE OWNED
+        // -----------------------------------------------------
+
+        if (
+            !data.ownedItemIds.Contains(
+                data.equippedOutfitItemId
+            )
+        )
+        {
+            data.ownedItemIds.Add(
+                data.equippedOutfitItemId
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // DEFAULT OUTFIT ALWAYS OWNED
+        // -----------------------------------------------------
+
+        EnsureDefaultOutfitOwnership(
+            data
+        );
+    }
+
+
+    // =========================================================
+    // DEFAULT OUTFIT OWNERSHIP
+    // =========================================================
+
+    private void EnsureDefaultOutfitOwnership(
+        PlayerData data)
+    {
+        if (data == null)
+        {
+            return;
+        }
+
+
+        if (data.ownedItemIds == null)
+        {
+            data.ownedItemIds =
+                new List<int>();
+        }
+
+
+        int defaultOutfitId =
+            ResolveDefaultItemId(
+                GameItemCategory.Outfit,
+                DefaultOutfitItemId);
+
+        if (
+            !data.ownedItemIds.Contains(
+                defaultOutfitId
+            )
+        )
+        {
+            data.ownedItemIds.Add(
+                defaultOutfitId
+            );
+        }
+    }
+
+
+    // =========================================================
+    // EQUIPMENT NORMALIZATION
+    // =========================================================
+
+    private int NormalizeVehicleId(
+        int itemId)
+    {
+        if (IsItemInCategory(
+                itemId,
+                GameItemCategory.Vehicle))
+        {
+            return itemId;
+        }
+
+        return ResolveDefaultItemId(
+            GameItemCategory.Vehicle,
+            DefaultVehicleItemId);
+    }
+
+
+    private int NormalizeOutfitId(
+        int itemId)
+    {
+        if (IsItemInCategory(
+                itemId,
+                GameItemCategory.Outfit))
+        {
+            return itemId;
+        }
+
+        return ResolveDefaultItemId(
+            GameItemCategory.Outfit,
+            DefaultOutfitItemId);
+    }
+
+
+    private int NormalizeAccessoryId(
+        int itemId)
+    {
+        if (itemId == DefaultAccessoryItemId)
+        {
+            return DefaultAccessoryItemId;
+        }
+
+        if (IsItemInCategory(
+                itemId,
+                GameItemCategory.Accessory))
+        {
+            return itemId;
+        }
+
+        return DefaultAccessoryItemId;
+    }
+
+
+    private int NormalizeCosmeticId(
+        int itemId)
+    {
+        if (itemId == DefaultCosmeticItemId)
+        {
+            return DefaultCosmeticItemId;
+        }
+
+        if (IsItemInCategory(
+                itemId,
+                GameItemCategory.Cosmetic))
+        {
+            return itemId;
+        }
+
+        return DefaultCosmeticItemId;
+    }
+
+
+    // =========================================================
+    // MIGRATION DETECTION
+    // =========================================================
+
+    private bool NeedsPlayerDataMigration(
+        DocumentSnapshot snapshot)
+    {
+        if (snapshot == null)
+        {
+            return false;
+        }
+
+
+        // -----------------------------------------------------
+        // OWNERSHIP VERSION
+        // -----------------------------------------------------
+
+        if (
+            !snapshot.ContainsField(
+                "ownershipMigrationVersion"
+            )
+        )
+        {
+            return true;
+        }
+
+
+        int ownershipVersion =
+            GetInt(
+                snapshot,
+                "ownershipMigrationVersion",
+                0
+            );
+
+
+        if (
+            ownershipVersion <
+            OwnershipMigrationVersion
+        )
+        {
+            return true;
+        }
+
+
+        // -----------------------------------------------------
+        // VEHICLE
+        // -----------------------------------------------------
+
+        if (
+            !snapshot.ContainsField(
+                "equippedVehicleItemId"
+            )
+        )
+        {
+            return true;
+        }
+
+
+        int storedVehicle =
+            GetInt(
+                snapshot,
+                "equippedVehicleItemId",
+                DefaultVehicleItemId
+            );
+
+
+        if (
+            storedVehicle !=
+            NormalizeVehicleId(
+                storedVehicle
+            )
+        )
+        {
+            return true;
+        }
+
+
+        // -----------------------------------------------------
+        // OUTFIT
+        // -----------------------------------------------------
+
+        if (
+            !snapshot.ContainsField(
+                "equippedOutfitItemId"
+            )
+        )
+        {
+            return true;
+        }
+
+
+        int storedOutfit =
+            GetInt(
+                snapshot,
+                "equippedOutfitItemId",
+                DefaultOutfitItemId
+            );
+
+
+        if (
+            storedOutfit !=
+            NormalizeOutfitId(
+                storedOutfit
+            )
+        )
+        {
+            return true;
+        }
+
+
+        // -----------------------------------------------------
+        // ACCESSORY
+        // -----------------------------------------------------
+
+        if (
+            !snapshot.ContainsField(
+                "equippedAccessoryItemId"
+            )
+        )
+        {
+            return true;
+        }
+
+
+        int storedAccessory =
+            GetInt(
+                snapshot,
+                "equippedAccessoryItemId",
+                DefaultAccessoryItemId
+            );
+
+
+        if (
+            storedAccessory !=
+            NormalizeAccessoryId(
+                storedAccessory
+            )
+        )
+        {
+            return true;
+        }
+
+
+        // -----------------------------------------------------
+        // COSMETIC
+        // -----------------------------------------------------
+
+        if (
+            !snapshot.ContainsField(
+                "equippedCosmeticItemId"
+            )
+        )
+        {
+            return true;
+        }
+
+
+        int storedCosmetic =
+            GetInt(
+                snapshot,
+                "equippedCosmeticItemId",
+                DefaultCosmeticItemId
+            );
+
+
+        if (
+            storedCosmetic !=
+            NormalizeCosmeticId(
+                storedCosmetic
+            )
+        )
+        {
+            return true;
+        }
+
+
+        return false;
+    }
+
+
+    // =========================================================
+    // SANITIZE OWNED ITEMS
+    // =========================================================
+
+    private List<int> SanitizeOwnedItemIds(
+        List<int> source)
+    {
+        int capacity =
+            source != null
+                ? source.Count + 2
+                : 2;
+
+
+        List<int> result =
+            new List<int>(
+                capacity
+            );
+
+
+        HashSet<int> seen =
+            new HashSet<int>();
+
+
+        if (source != null)
+        {
+            for (
+                int i = 0;
+                i < source.Count;
+                i++
+            )
+            {
+                int itemId =
+                    source[i];
+
+
+                if (!IsValidShopItemId(itemId))
+                {
+                    continue;
+                }
+
+
+                if (!seen.Add(itemId))
+                {
+                    continue;
+                }
+
+
+                result.Add(
+                    itemId
+                );
+            }
+        }
+
+
+        // -----------------------------------------------------
+        // DEFAULT VEHICLE
+        // -----------------------------------------------------
+
+        int defaultVehicleId =
+            ResolveDefaultItemId(
+                GameItemCategory.Vehicle,
+                DefaultVehicleItemId);
+
+        if (
+            seen.Add(
+                defaultVehicleId
+            )
+        )
+        {
+            result.Add(
+                defaultVehicleId
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // DEFAULT OUTFIT
+        // -----------------------------------------------------
+
+        int defaultOutfitId =
+            ResolveDefaultItemId(
+                GameItemCategory.Outfit,
+                DefaultOutfitItemId);
+
+        if (
+            seen.Add(
+                defaultOutfitId
+            )
+        )
+        {
+            result.Add(
+                defaultOutfitId
+            );
+        }
+
+
+        return result;
+    }
+
+
+    // =========================================================
     // MISSION DATA → FIRESTORE
     // =========================================================
 
@@ -1206,14 +2611,17 @@ public class FirestorePlayerDataManager : MonoBehaviour
             for (
                 int i = 0;
                 i < data.missionStates.Count;
-                i++)
+                i++
+            )
             {
                 MissionSaveData mission =
                     data.missionStates[i];
 
 
                 if (mission == null)
+                {
                     continue;
+                }
 
 
                 missionStates.Add(
@@ -1310,337 +2718,500 @@ public class FirestorePlayerDataManager : MonoBehaviour
     // =========================================================
 
     private PlayerData ConvertSnapshotToPlayerData(
-        DocumentSnapshot snapshot,
-        string uid)
+    DocumentSnapshot snapshot,
+    string uid)
+{
+    PlayerData data = new PlayerData();
+
+    data.uid = uid;
+
+    // =====================================================
+    // ACCOUNT
+    // =====================================================
+
+    data.displayName =
+        GetString(
+            snapshot,
+            "displayName",
+            "Player"
+        );
+
+    // =====================================================
+    // PROGRESSION
+    // =====================================================
+
+    data.level =
+        GetInt(
+            snapshot,
+            "level",
+            1
+        );
+
+    data.exp =
+        GetInt(
+            snapshot,
+            "exp",
+            0
+        );
+
+    // =====================================================
+    // RUN
+    // =====================================================
+
+    data.totalRuns =
+        GetInt(
+            snapshot,
+            "totalRuns",
+            0
+        );
+
+    // =====================================================
+    // ECONOMY
+    // =====================================================
+
+    data.coins =
+        GetInt(
+            snapshot,
+            "coins",
+            0
+        );
+
+    data.gems =
+        GetInt(
+            snapshot,
+            "gems",
+            0
+        );
+
+    data.bestScore =
+        GetInt(
+            snapshot,
+            "bestScore",
+            0
+        );
+
+    // =====================================================
+    // LEGACY BIKE
+    //
+    // Giữ lại để tương thích dữ liệu cũ.
+    // KHÔNG dùng selectedBike nếu equippedVehicleItemId
+    // hiện tại đã hợp lệ.
+    // =====================================================
+
+    data.selectedBike =
+        GetString(
+            snapshot,
+            "selectedBike",
+            "NinjaLead"
+        );
+
+    data.ownedBikes =
+        ReadStringList(
+            snapshot,
+            "ownedBikes"
+        );
+
+    if (data.ownedBikes == null ||
+        data.ownedBikes.Count == 0)
     {
-        PlayerData data =
-            new PlayerData();
-
-
-        data.uid =
-            uid;
-
-
-        // =====================================================
-        // ACCOUNT
-        // =====================================================
-
-        data.displayName =
-            GetString(
-                snapshot,
-                "displayName",
-                "Player"
-            );
-
-
-        // =====================================================
-        // PROGRESSION
-        // =====================================================
-
-        data.level =
-            GetInt(
-                snapshot,
-                "level",
-                1
-            );
-
-        data.exp =
-            GetInt(
-                snapshot,
-                "exp",
-                0
-            );
-
-
-        // =====================================================
-        // ECONOMY
-        // =====================================================
-
-        data.coins =
-            GetInt(
-                snapshot,
-                "coins",
-                0
-            );
-
-        data.bestScore =
-            GetInt(
-                snapshot,
-                "bestScore",
-                0
-            );
-
-
-        // =====================================================
-        // BIKE
-        // =====================================================
-
-        data.selectedBike =
-            GetString(
-                snapshot,
-                "selectedBike",
-                "NinjaLead"
-            );
-
-
         data.ownedBikes =
-            ReadStringList(
+            new List<string>
+            {
+                "NinjaLead"
+            };
+    }
+
+    // =====================================================
+    // SHOP / INVENTORY
+    // =====================================================
+
+    data.ownedItemIds =
+        ReadIntList(
+            snapshot,
+            "ownedItemIds"
+        );
+
+    if (data.ownedItemIds == null)
+    {
+        data.ownedItemIds =
+            new List<int>();
+    }
+
+    data.ownedItemIds =
+        SanitizeOwnedItemIds(
+            data.ownedItemIds
+        );
+
+    // =====================================================
+    // EQUIPMENT
+    // =====================================================
+
+    // -----------------------------------------------------
+    // VEHICLE
+    //
+    // Priority:
+    //
+    // 1. equippedVehicleItemId hợp lệ
+    // 2. Legacy selectedBike
+    // 3. Default Vehicle = 1
+    //
+    // QUAN TRỌNG:
+    // Nếu Firestore có equippedVehicleItemId hợp lệ,
+    // tuyệt đối không đọc selectedBike để override.
+    // -----------------------------------------------------
+
+    bool hasPersistedVehicleId =
+        snapshot.ContainsField(
+            "equippedVehicleItemId"
+        );
+
+    int persistedVehicleId =
+        hasPersistedVehicleId
+            ? GetInt(
                 snapshot,
-                "ownedBikes"
-            );
-
-
-        if (
-            data.ownedBikes == null ||
-            data.ownedBikes.Count == 0
-        )
-        {
-            data.ownedBikes =
-                new List<string>
-                {
-                    "NinjaLead"
-                };
-        }
-
-
-        // =====================================================
-        // ITEM UPGRADES
-        // =====================================================
-
-        data.gumUpgradeLevel =
-            Mathf.Max(
-                1,
-                GetInt(
-                    snapshot,
-                    "gumUpgradeLevel",
-                    1
-                )
-            );
-
-
-        data.photonUpgradeLevel =
-            Mathf.Max(
-                1,
-                GetInt(
-                    snapshot,
-                    "photonUpgradeLevel",
-                    1
-                )
-            );
-
-
-        data.shieldUpgradeLevel =
-            Mathf.Max(
-                1,
-                GetInt(
-                    snapshot,
-                    "shieldUpgradeLevel",
-                    1
-                )
-            );
-
-
-        data.magnetUpgradeLevel =
-            Mathf.Max(
-                1,
-                GetInt(
-                    snapshot,
-                    "magnetUpgradeLevel",
-                    1
-                )
-            );
-
-
-        // =====================================================
-        // DAILY MISSION
-        // =====================================================
-
-        data.missionDate =
-            GetString(
-                snapshot,
-                "missionDate",
-                string.Empty
-            );
-
-
-        data.missionSelection =
-            ReadStringList(
-                snapshot,
-                "missionSelection"
-            );
-
-
-        if (data.missionSelection == null)
-        {
-            data.missionSelection =
-                new List<string>();
-        }
-
-
-        data.missionDailyCoins =
-            GetInt(
-                snapshot,
-                "missionDailyCoins",
+                "equippedVehicleItemId",
                 0
-            );
-
-
-        data.missionDailyDistance =
-            GetInt(
-                snapshot,
-                "missionDailyDistance",
-                0
-            );
-
-
-        data.missionDailyRuns =
-            GetInt(
-                snapshot,
-                "missionDailyRuns",
-                0
-            );
-
-
-        data.missionDailyExp =
-            GetInt(
-                snapshot,
-                "missionDailyExp",
-                0
-            );
-
-
-        data.missionPreviousTotalExp =
-            GetInt(
-                snapshot,
-                "missionPreviousTotalExp",
-                data.exp
-            );
-
-
-        data.missionStates =
-            ReadMissionStates(
-                snapshot,
-                "missionStates"
-            );
-
-
-        if (data.missionStates == null)
-        {
-            data.missionStates =
-                new List<MissionSaveData>();
-        }
-
-
-        // =====================================================
-        // SAFETY
-        // =====================================================
-
-        data.level =
-            Mathf.Max(
-                1,
-                data.level
-            );
-
-
-        data.exp =
-            Mathf.Max(
-                0,
-                data.exp
-            );
-
-
-        data.coins =
-            Mathf.Max(
-                0,
-                data.coins
-            );
-
-
-        data.bestScore =
-            Mathf.Max(
-                0,
-                data.bestScore
-            );
-
-
-        data.gumUpgradeLevel =
-            Mathf.Max(
-                1,
-                data.gumUpgradeLevel
-            );
-
-
-        data.photonUpgradeLevel =
-            Mathf.Max(
-                1,
-                data.photonUpgradeLevel
-            );
-
-
-        data.shieldUpgradeLevel =
-            Mathf.Max(
-                1,
-                data.shieldUpgradeLevel
-            );
-
-
-        data.magnetUpgradeLevel =
-            Mathf.Max(
-                1,
-                data.magnetUpgradeLevel
-            );
-
-
-        data.missionDailyCoins =
-            Mathf.Max(
-                0,
-                data.missionDailyCoins
-            );
-
-
-        data.missionDailyDistance =
-            Mathf.Max(
-                0,
-                data.missionDailyDistance
-            );
-
-
-        data.missionDailyRuns =
-            Mathf.Max(
-                0,
-                data.missionDailyRuns
-            );
-
-
-        data.missionDailyExp =
-            Mathf.Max(
-                0,
-                data.missionDailyExp
-            );
-
-
-        data.missionPreviousTotalExp =
-            Mathf.Max(
-                0,
-                data.missionPreviousTotalExp
-            );
-
-
-        if (
-            string.IsNullOrWhiteSpace(
-                data.selectedBike
             )
-        )
+            : 0;
+
+    int resolvedVehicleId;
+
+    if (persistedVehicleId >= VehicleMinId &&
+        persistedVehicleId <= VehicleMaxId)
+    {
+        // =================================================
+        // MODERN DATA
+        // =================================================
+
+        resolvedVehicleId =
+            persistedVehicleId;
+    }
+    else
+    {
+        // =================================================
+        // LEGACY DATA
+        // =================================================
+
+        resolvedVehicleId =
+            ResolveLegacyVehicleItemId(
+                data.selectedBike
+            );
+
+        // Không resolve được legacy vehicle
+        // => dùng default Vehicle 1.
+        if (resolvedVehicleId < VehicleMinId ||
+            resolvedVehicleId > VehicleMaxId)
         {
-            data.selectedBike =
-                "NinjaLead";
+            resolvedVehicleId =
+                DefaultVehicleItemId;
         }
+    }
 
+    data.equippedVehicleItemId =
+        NormalizeVehicleId(
+            resolvedVehicleId
+        );
 
-        return data;
+    // =====================================================
+    // OUTFIT
+    // =====================================================
+
+    int persistedOutfitId =
+        GetInt(
+            snapshot,
+            "equippedOutfitItemId",
+            DefaultOutfitItemId
+        );
+
+    data.equippedOutfitItemId =
+        NormalizeOutfitId(
+            persistedOutfitId
+        );
+
+    // =====================================================
+    // ACCESSORY
+    // =====================================================
+
+    int persistedAccessoryId =
+        GetInt(
+            snapshot,
+            "equippedAccessoryItemId",
+            DefaultAccessoryItemId
+        );
+
+    data.equippedAccessoryItemId =
+        NormalizeAccessoryId(
+            persistedAccessoryId
+        );
+
+    // =====================================================
+    // COSMETIC
+    // =====================================================
+
+    int persistedCosmeticId =
+        GetInt(
+            snapshot,
+            "equippedCosmeticItemId",
+            DefaultCosmeticItemId
+        );
+
+    data.equippedCosmeticItemId =
+        NormalizeCosmeticId(
+            persistedCosmeticId
+        );
+
+    // =====================================================
+    // DEFAULT OUTFIT OWNERSHIP
+    // =====================================================
+
+    EnsureDefaultOutfitOwnership(
+        data
+    );
+
+    // =====================================================
+    // UPGRADES
+    // =====================================================
+
+    data.gumUpgradeLevel =
+        Mathf.Max(
+            1,
+            GetInt(
+                snapshot,
+                "gumUpgradeLevel",
+                1
+            )
+        );
+
+    data.photonUpgradeLevel =
+        Mathf.Max(
+            1,
+            GetInt(
+                snapshot,
+                "photonUpgradeLevel",
+                1
+            )
+        );
+
+    data.shieldUpgradeLevel =
+        Mathf.Max(
+            1,
+            GetInt(
+                snapshot,
+                "shieldUpgradeLevel",
+                1
+            )
+        );
+
+    data.magnetUpgradeLevel =
+        Mathf.Max(
+            1,
+            GetInt(
+                snapshot,
+                "magnetUpgradeLevel",
+                1
+            )
+        );
+
+    // =====================================================
+    // MISSION
+    // =====================================================
+
+    data.missionDate =
+        GetString(
+            snapshot,
+            "missionDate",
+            string.Empty
+        );
+
+    data.missionSelection =
+        ReadStringList(
+            snapshot,
+            "missionSelection"
+        );
+
+    if (data.missionSelection == null)
+    {
+        data.missionSelection =
+            new List<string>();
+    }
+
+    data.missionDailyCoins =
+        GetInt(
+            snapshot,
+            "missionDailyCoins",
+            0
+        );
+
+    data.missionDailyDistance =
+        GetInt(
+            snapshot,
+            "missionDailyDistance",
+            0
+        );
+
+    data.missionDailyRuns =
+        GetInt(
+            snapshot,
+            "missionDailyRuns",
+            0
+        );
+
+    data.missionDailyExp =
+        GetInt(
+            snapshot,
+            "missionDailyExp",
+            0
+        );
+
+    data.missionPreviousTotalExp =
+        GetInt(
+            snapshot,
+            "missionPreviousTotalExp",
+            data.exp
+        );
+
+    data.missionStates =
+        ReadMissionStates(
+            snapshot,
+            "missionStates"
+        );
+
+    if (data.missionStates == null)
+    {
+        data.missionStates =
+            new List<MissionSaveData>();
+    }
+
+    // =====================================================
+    // FINAL NORMALIZATION
+    // =====================================================
+
+    NormalizePlayerDataInPlace(
+        data
+    );
+
+    return data;
+}
+
+    private int ResolveLegacyVehicleItemId(
+    string selectedBike)
+{
+    if (string.IsNullOrWhiteSpace(selectedBike))
+    {
+        return 0;
     }
 
 
+    string normalizedLegacyName =
+        NormalizeLegacyBikeName(
+            selectedBike
+        );
+
+
+    if (string.IsNullOrEmpty(normalizedLegacyName))
+    {
+        return 0;
+    }
+
+
+    // =====================================================
+    // LEGACY NAME → CURRENT ITEM ID
+    // =====================================================
+    //
+    // Database hiện tại:
+    // Vehicle = ItemId 1..40
+    //
+    // Không dùng array index làm ID.
+    // Không hard-code từng vehicle name.
+    //
+    // Lookup trực tiếp từ GameItemDatabase.
+    // =====================================================
+
+    GameItemDatabase database =
+        FindGameItemDatabaseForMigration();
+
+
+    if (database == null)
+    {
+        return 0;
+    }
+
+
+    database.Initialize();
+
+
+    IReadOnlyList<GameItemData> items =
+        database.Items;
+
+
+    if (items == null)
+    {
+        return 0;
+    }
+
+
+    for (
+        int i = 0;
+        i < items.Count;
+        i++
+    )
+    {
+        GameItemData item =
+            items[i];
+
+
+        if (item == null)
+        {
+            continue;
+        }
+
+
+        if (
+            item.Category !=
+            GameItemCategory.Vehicle
+        )
+        {
+            continue;
+        }
+
+
+        string normalizedItemName =
+            NormalizeLegacyBikeName(
+                item.ItemName
+            );
+
+
+        if (
+            string.Equals(
+                normalizedItemName,
+                normalizedLegacyName,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            return item.ItemId;
+        }
+    }
+
+
+    return 0;
+}
+
+    private static string NormalizeLegacyBikeName(
+    string value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return string.Empty;
+    }
+
+
+    return value
+        .Replace(" ", string.Empty)
+        .Replace("_", string.Empty)
+        .Replace("-", string.Empty)
+        .Trim();
+}
     // =========================================================
     // READ STRING
     // =========================================================
@@ -1651,7 +3222,9 @@ public class FirestorePlayerDataManager : MonoBehaviour
         string defaultValue)
     {
         if (!snapshot.ContainsField(field))
+        {
             return defaultValue;
+        }
 
 
         try
@@ -1677,7 +3250,9 @@ public class FirestorePlayerDataManager : MonoBehaviour
         int defaultValue)
     {
         if (!snapshot.ContainsField(field))
+        {
             return defaultValue;
+        }
 
 
         try
@@ -1689,10 +3264,8 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
             if (
-                value >
-                int.MaxValue ||
-                value <
-                int.MinValue
+                value > int.MaxValue ||
+                value < int.MinValue
             )
             {
                 return defaultValue;
@@ -1744,20 +3317,25 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
             if (rawList == null)
+            {
                 return result;
+            }
 
 
             for (
                 int i = 0;
                 i < rawList.Count;
-                i++)
+                i++
+            )
             {
                 object item =
                     rawList[i];
 
 
                 if (item == null)
+                {
                     continue;
+                }
 
 
                 string value =
@@ -1766,7 +3344,9 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
                 if (!string.IsNullOrEmpty(value))
                 {
-                    result.Add(value);
+                    result.Add(
+                        value
+                    );
                 }
             }
 
@@ -1777,6 +3357,92 @@ public class FirestorePlayerDataManager : MonoBehaviour
         {
             return new List<string>();
         }
+    }
+
+
+    // =========================================================
+    // READ INT LIST
+    // =========================================================
+
+    private List<int> ReadIntList(
+        DocumentSnapshot snapshot,
+        string field)
+    {
+        List<int> result =
+            new List<int>();
+
+
+        if (!snapshot.ContainsField(field))
+        {
+            return result;
+        }
+
+
+        try
+        {
+            List<object> rawList =
+                snapshot.GetValue<List<object>>(
+                    field
+                );
+
+
+            if (rawList == null)
+            {
+                return result;
+            }
+
+
+            for (
+                int i = 0;
+                i < rawList.Count;
+                i++
+            )
+            {
+                object item =
+                    rawList[i];
+
+
+                if (item == null)
+                {
+                    continue;
+                }
+
+
+                int value =
+                    ConvertFirestoreInt(
+                        item,
+                        -1
+                    );
+
+
+                if (!IsValidShopItemId(value))
+                {
+                    continue;
+                }
+
+
+                if (result.Contains(value))
+                {
+                    continue;
+                }
+
+
+                result.Add(
+                    value
+                );
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning(
+                $"[Firestore] ReadIntList failed: " +
+                $"{field} | {exception}",
+                this
+            );
+        }
+
+
+        return result;
     }
 
 
@@ -1807,13 +3473,16 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
 
             if (rawList == null)
+            {
                 return result;
+            }
 
 
             for (
                 int i = 0;
                 i < rawList.Count;
-                i++)
+                i++
+            )
             {
                 object rawItem =
                     rawList[i];
@@ -1909,7 +3578,8 @@ public class FirestorePlayerDataManager : MonoBehaviour
         catch (Exception exception)
         {
             Debug.LogWarning(
-                $"[Firestore] ReadMissionStates failed: {exception}"
+                $"[Firestore] ReadMissionStates failed: {exception}",
+                this
             );
         }
 
@@ -1927,32 +3597,46 @@ public class FirestorePlayerDataManager : MonoBehaviour
         int defaultValue)
     {
         if (value == null)
+        {
             return defaultValue;
+        }
 
 
         try
         {
             if (value is long longValue)
-                return ClampToInt(longValue);
+            {
+                return ClampToInt(
+                    longValue
+                );
+            }
 
 
             if (value is int intValue)
+            {
                 return intValue;
+            }
 
 
             if (value is double doubleValue)
+            {
                 return ClampToInt(
                     (long)doubleValue
                 );
+            }
 
 
             if (value is float floatValue)
+            {
                 return ClampToInt(
                     (long)floatValue
                 );
+            }
 
 
-            return Convert.ToInt32(value);
+            return Convert.ToInt32(
+                value
+            );
         }
         catch
         {
@@ -1961,13 +3645,20 @@ public class FirestorePlayerDataManager : MonoBehaviour
     }
 
 
-    private int ClampToInt(long value)
+    private int ClampToInt(
+        long value)
     {
         if (value > int.MaxValue)
+        {
             return int.MaxValue;
+        }
+
 
         if (value < int.MinValue)
+        {
             return int.MinValue;
+        }
+
 
         return (int)value;
     }
@@ -1983,11 +3674,14 @@ public class FirestorePlayerDataManager : MonoBehaviour
 
         IsLoading = false;
 
+
         OnPlayerDataCleared?.Invoke();
 
 
         Debug.Log(
-            "[Firestore] Current player data cleared."
+            "[Firestore] Current player data cleared.",
+            this
         );
     }
+    
 }

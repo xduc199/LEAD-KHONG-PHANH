@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_011_Lead_11
+  m_EditorClassIdentifier: 
+  itemId: 11
+  itemName: Lead Kim Long
+  description: "Thi\u1EBFt k\u1EBF v\xE0ng kim, h\u1ECDa ti\u1EBFt r\u1ED3ng v\xE0
+    \xE1nh kim sang tr\u1ECDng. Mang phong c\xE1ch \u201Cxe VIP\u201D n\u1ED5i b\u1EADt
+    gi\u1EEFa traffic."
+  category: 0
+  subCategory: "\u0110\u1EB7c Bi\u1EC7t"
+  rarity: 3
+  icon: {fileID: 21300000, guid: de7f3e6334e37494b8f8cc1ab7ec3cfa, type: 3}
+  prefab: {fileID: 6326726421732722259, guid: 2ad26b425ae77ed4694d77e67b753f05, type: 3}
+  visualId: VISUAL_ITEM_011
+  purchasable: 1
+  price: 1000
+  currency: 1
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 3
+      isPercent: 0
+      condition: 
+    - statKey: Acceleration
+      value: 12
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 12
+      isPercent: 1
+      condition: 
+  sourceBuffText: 'MaxSpeed: 3, Acceleration: 12, Handling: 12'
+  passiveDescription: Lead 11 - Vehicle Rare

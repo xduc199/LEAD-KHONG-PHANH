@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: Item_058_Deadline_Set
+  m_EditorClassIdentifier: 
+  itemId: 58
+  itemName: "Trang Ph\u1EE5c 18"
+  description: "Trang Ph\u1EE5c 18 - Outfit Rare"
+  category: 1
+  subCategory: "Trang Ph\u1EE5c"
+  rarity: 2
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_058
+  purchasable: 1
+  price: 500
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: Acceleration
+      value: 12
+      isPercent: 1
+      condition: 
+    - statKey: Handling
+      value: 12
+      isPercent: 1
+      condition: 
+    - statKey: JumpForce
+      value: 1.5
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'Acceleration: 12, Handling: 12, JumpForce: 1.5'
+  passiveDescription: "Trang Ph\u1EE5c 18 - Outfit Rare"

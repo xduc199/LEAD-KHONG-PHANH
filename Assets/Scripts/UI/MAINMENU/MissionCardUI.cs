@@ -427,69 +427,63 @@ public class MissionCardUI : MonoBehaviour
     //=========================================================
     // DATA
     //=========================================================
+public void SetData(
+    string title,
+    string description,
+    int currentProgress,
+    int targetProgress,
+    int expReward,
+    int goldReward,
+    bool completed,
+    bool claimed)
+{
+    CacheReferences();
+    FixRaycastBlocking();
 
-    public void SetData(
-        string title,
-        string description,
-        int currentProgress,
-        int targetProgress,
-        int expReward,
-        bool completed,
-        bool claimed)
+    //=====================================================
+    // TEXT
+    //=====================================================
+
+    if (titleText != null)
     {
-        CacheReferences();
-        FixRaycastBlocking();
-
-
-        //=====================================================
-        // TEXT
-        //=====================================================
-
-        if (titleText != null)
-        {
-            titleText.text =
-                title;
-        }
-
-        if (descriptionText != null)
-        {
-            descriptionText.text =
-                description;
-        }
-
-        if (progressText != null)
-        {
-            progressText.text =
-                $"{currentProgress} / {targetProgress}";
-        }
-
-        if (rewardText != null)
-        {
-            rewardText.text =
-                $"+{expReward} EXP";
-        }
-
-
-        //=====================================================
-        // PROGRESS
-        //=====================================================
-
-        UpdateProgress(
-            currentProgress,
-            targetProgress
-        );
-
-
-        //=====================================================
-        // BUTTON
-        //=====================================================
-
-        UpdateClaimButton(
-            completed,
-            claimed
-        );
+        titleText.text = title;
     }
 
+    if (descriptionText != null)
+    {
+        descriptionText.text = description;
+    }
+
+    if (progressText != null)
+    {
+        progressText.text =
+            $"{currentProgress} / {targetProgress}";
+    }
+
+    if (rewardText != null)
+    {
+        rewardText.text =
+            $"+{expReward} EXP | +{goldReward} GOLD";
+    }
+
+    //=====================================================
+    // PROGRESS
+    //=====================================================
+
+    UpdateProgress(
+        currentProgress,
+        targetProgress
+    );
+
+    //=====================================================
+    // BUTTON
+    //=====================================================
+
+    UpdateClaimButton(
+        completed,
+        claimed
+    );
+}
 
     //=========================================================
     // PROGRESS

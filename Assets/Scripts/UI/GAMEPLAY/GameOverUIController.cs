@@ -1,300 +1,364 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using TMPro;
-using UnityEngine.EventSystems;
 
-public class GameOverUIController : MonoBehaviour
+public sealed class GameOverUIController : MonoBehaviour
 {
-    //=============================================================
-    // UI
-    //=============================================================
+    // =====================================================================
+    // GAME OVER PANEL
+    // =====================================================================
 
-    [Header("Game Over UI")]
+    [Header("Game Over Panel")]
     [SerializeField] private GameObject gameOverPanel;
-    [SerializeField] private CanvasGroup canvasGroup;
-    [SerializeField] private RectTransform panelRect;
+    [SerializeField] private CanvasGroup gameOverCanvasGroup;
+    [SerializeField] private RectTransform gameOverPanelRect;
 
+    // =====================================================================
+    // REVIVE PANEL
+    // =====================================================================
 
-    //=============================================================
-    // SCORE
-    //=============================================================
+    [Header("Revive Panel")]
+    [SerializeField] private GameObject revivePanel;
+    [SerializeField] private CanvasGroup reviveCanvasGroup;
+    [SerializeField] private RectTransform revivePanelRect;
 
-    [Header("Score")]
+    // =====================================================================
+    // BACKDROP
+    // =====================================================================
+
+    [Header("Backdrop")]
+    [SerializeField] private GameObject backdrop;
+    [SerializeField] private CanvasGroup backdropCanvasGroup;
+
+    // =====================================================================
+    // RESULT UI
+    // =====================================================================
+
+    [Header("Result")]
     [SerializeField] private TMP_Text scoreValue;
     [SerializeField] private TMP_Text highScoreValue;
-
-
-    //=============================================================
-    // COINS
-    //=============================================================
-
-    [Header("Coins")]
     [SerializeField] private TMP_Text coinValue;
 
-
-    //=============================================================
+    // =====================================================================
     // EXP UI
-    //=============================================================
+    // =====================================================================
 
-    [Header("EXP UI")]
-    [Tooltip("Hiển thị EXP nhận được trong run. Ví dụ: +200 EXP")]
+    [Header("EXP")]
     [SerializeField] private TMP_Text expRewardValue;
-
-    [Tooltip("Hiển thị Level hiện tại. Ví dụ: LEVEL 3")]
     [SerializeField] private TMP_Text levelValue;
-
-    [Tooltip("Hiển thị khi người chơi vừa lên Level.")]
     [SerializeField] private TMP_Text levelUpValue;
 
+    // =====================================================================
+    // GAME OVER BUTTONS
+    // =====================================================================
 
-    //=============================================================
-    // BUTTONS
-    //=============================================================
-
-    [Header("Buttons")]
+    [Header("Game Over Buttons")]
     [SerializeField] private Button retryButton;
     [SerializeField] private Button mainMenuButton;
 
+    // =====================================================================
+    // REVIVE UI
+    // =====================================================================
 
-    //=============================================================
-    // GAME OVER DELAY
-    //=============================================================
+    [Header("Revive UI")]
+    [SerializeField] private Button reviveButton;
+    [SerializeField] private TMP_Text reviveCostValue;
+    [SerializeField] private TMP_Text reviveGemValue;
+    [SerializeField] private TMP_Text reviveStatusValue;
+    [SerializeField] private TMP_Text reviveTimerValue;
+    [SerializeField] private Image reviveTimerFill;
 
-    [Header("Game Over Delay")]
-    [Tooltip("Thời gian giữ gameplay sau khi Player chết trước khi hiện Game Over.")]
-    [SerializeField] private float gameOverDelay = 5f;
+    // =====================================================================
+    // TRANSITION SETTINGS
+    // =====================================================================
 
+    [Header("Transition")]
+    [SerializeField] private float reviveShowDelay = 1.5f;
+    [SerializeField] private float fadeDuration = 0.55f;
+    [SerializeField] private float hiddenScale = 0.94f;
 
-    //=============================================================
-    // FADE
-    //=============================================================
-
-    [Header("Fade")]
-    [SerializeField] private float fadeDuration = 0.8f;
-
-
-    //=============================================================
-    // ANIMATION
-    //=============================================================
-
-    [Header("Panel Animation")]
-    [SerializeField] private float animationSpeed = 10f;
-    [SerializeField] private float hiddenScale = 0.88f;
-
-
-    //=============================================================
+    // =====================================================================
     // AUDIO
-    //=============================================================
+    // =====================================================================
 
     [Header("Audio")]
-    [Tooltip("Tắt toàn bộ AudioListener khi Game Over.")]
     [SerializeField] private bool muteAllAudioOnGameOver = true;
 
+    [Tooltip(
+        "AudioSource dùng riêng cho âm thanh khi Game Over Panel xuất hiện."
+    )]
+    [SerializeField] private AudioSource gameOverAudioSource;
 
-    //=============================================================
+    [Tooltip(
+        "Âm thanh được phát sau khi Game Over Panel fade-in hoàn tất."
+    )]
+    [SerializeField] private AudioClip gameOverPanelOpenClip;
+
+    [SerializeField, Range(0f, 1f)]
+    private float gameOverPanelOpenVolume = 1f;
+
+    // =====================================================================
     // SCENE
-    //=============================================================
+    // =====================================================================
 
     [Header("Scene")]
     [SerializeField] private string mainMenuSceneName = "MainMenu";
 
-
-    //=============================================================
+    // =====================================================================
     // EXP SETTINGS
-    //=============================================================
+    // =====================================================================
 
     [Header("EXP Reward")]
-    [Tooltip("Mỗi bao nhiêu mét sẽ nhận EXP.")]
-    [SerializeField] private float distancePerExpStep = 100f;
-
-    [Tooltip("EXP nhận được cho mỗi mốc khoảng cách.")]
+    [SerializeField] private int distancePerExpStep = 100;
     [SerializeField] private int expPerDistanceStep = 10;
-
-    [Tooltip("Mỗi bao nhiêu Coin sẽ nhận EXP.")]
     [SerializeField] private int coinsPerExpStep = 10;
-
-    [Tooltip("EXP nhận được cho mỗi mốc Coin.")]
     [SerializeField] private int expPerCoinStep = 5;
-
-    [Tooltip("EXP thưởng cố định khi kết thúc một run.")]
     [SerializeField] private int runCompletionExp = 20;
 
+    // =====================================================================
+    // BUTTON SAFETY
+    // =====================================================================
 
-    //=============================================================
-    // INPUT SAFETY
-    //=============================================================
+    [Header("Button Safety")]
+    [SerializeField] private float buttonUnlockDelay = 0.15f;
 
-    [Header("Input Safety")]
-    [Tooltip("Thời gian khóa Button sau khi Game Over Panel hoàn tất Fade.")]
-    [SerializeField] private float buttonUnlockDelay = 0.2f;
+    // =====================================================================
+    // INTERNAL STATE
+    // =====================================================================
 
+    private Vector3 gameOverBaseScale;
+    private Vector3 reviveBaseScale;
 
-    //=============================================================
-    // STATE
-    //=============================================================
+    private Coroutine transitionRoutine;
+    private Coroutine reviveUnlockRoutine;
 
-    private Vector3 panelBaseScale;
-
-    private bool isShowing;
     private bool gameOverSequenceStarted;
-    private bool expRewardGranted;
+    private bool revivePanelShowing;
+    private bool reviveButtonUnlocked;
+    private bool reviveTransitionStarted;
+
     private bool buttonsUnlocked;
+    private bool pointerInputEnabled;
     private bool transitionStarted;
-
-    private Coroutine gameOverRoutine;
-
-
-    //=============================================================
-    // EVENT SYSTEM STATE
-    //=============================================================
-
-    private bool previousSendNavigationEvents;
-    private bool eventSystemStateCaptured;
-
-
-    //=============================================================
-    // POINTER INPUT STATE
-    //=============================================================
 
     private bool retryPointerArmed;
     private bool mainMenuPointerArmed;
-    private bool pointerInputEnabled;
 
+    private float reviveTimerInitialDuration;
 
-    //=============================================================
-    // EXP RESULT STATE
-    //=============================================================
+    // =====================================================================
+    // AUDIO STATE
+    // =====================================================================
+
+    private bool gameOverPanelOpenSoundPlayed;
+
+    // =====================================================================
+    // EXP STATE
+    // =====================================================================
+
+    private bool expRewardGranted;
 
     private int lastRunExpReward;
     private int levelBeforeRun;
     private int levelAfterRun;
     private bool leveledUpThisRun;
 
+    // =====================================================================
+    // EVENT SYSTEM
+    // =====================================================================
 
-    //=============================================================
+    private bool previousSendNavigationEvents;
+    private bool eventSystemStateCaptured;
+
+    // =====================================================================
     // UNITY
-    //=============================================================
+    // =====================================================================
 
     private void Awake()
     {
-        if (gameOverPanel == null)
-        {
-            Debug.LogError(
-                "[GameOverUIController] Chưa gán Game Over Panel.",
-                this
-            );
-        }
-
-        if (panelRect != null)
-        {
-            panelBaseScale = panelRect.localScale;
-        }
-
-        if (canvasGroup == null && gameOverPanel != null)
-        {
-            canvasGroup =
-                gameOverPanel.GetComponent<CanvasGroup>();
-
-            if (canvasGroup == null)
-            {
-                canvasGroup =
-                    gameOverPanel.AddComponent<CanvasGroup>();
-            }
-        }
-
+        CacheReferences();
         SetupButtons();
         SetupPointerGuards();
+        SetupAudio();
 
-        HideImmediate();
+        gameOverPanelOpenSoundPlayed = false;
+
+        HideEverythingImmediate();
     }
-
 
     private void Start()
     {
         Time.timeScale = 1f;
+        AudioListener.pause = false;
 
-        expRewardGranted = false;
-        buttonsUnlocked = false;
-        transitionStarted = false;
+        CaptureEventSystemState();
 
-        pointerInputEnabled = false;
-        retryPointerArmed = false;
-        mainMenuPointerArmed = false;
+        GameManager gameManager = GameManager.Instance;
 
-        RestoreEventSystemNavigation();
-
-        if (GameManager.Instance != null)
+        if (gameManager == null)
         {
-            GameManager.Instance.OnGameOver +=
-                StartGameOverSequence;
-        }
-    }
+            Debug.LogWarning(
+                "[GameOverUIController] GameManager.Instance == NULL."
+            );
 
-
-    private void OnDestroy()
-    {
-        if (GameManager.Instance != null)
-        {
-            GameManager.Instance.OnGameOver -=
-                StartGameOverSequence;
+            return;
         }
 
-        RestoreEventSystemNavigation();
+        gameManager.OnDeathPending += HandleDeathPending;
+        gameManager.OnRevive += HandleRevive;
+        gameManager.OnGameOver += StartGameOverSequence;
     }
-
 
     private void Update()
     {
-        if (!isShowing)
-            return;
-
-        AnimatePanel();
-
-        if (!buttonsUnlocked)
+        if (revivePanelShowing)
         {
-            ClearEventSystemSelection();
+            UpdateReviveUI();
+
+            if (!reviveButtonUnlocked)
+            {
+                EventSystem eventSystem = EventSystem.current;
+
+                if (eventSystem != null)
+                    eventSystem.SetSelectedGameObject(null);
+            }
         }
     }
 
+    private void OnDestroy()
+    {
+        StopTransitionRoutine();
+        StopReviveUnlockRoutine();
 
-    //=============================================================
+        GameManager gameManager = GameManager.Instance;
+
+        if (gameManager != null)
+        {
+            gameManager.OnDeathPending -= HandleDeathPending;
+            gameManager.OnRevive -= HandleRevive;
+            gameManager.OnGameOver -= StartGameOverSequence;
+        }
+
+        RestoreEventSystemState();
+    }
+
+    // =====================================================================
+    // CACHE
+    // =====================================================================
+
+    private void CacheReferences()
+    {
+        if (gameOverPanel != null)
+        {
+            if (gameOverCanvasGroup == null)
+                gameOverCanvasGroup =
+                    gameOverPanel.GetComponent<CanvasGroup>();
+
+            if (gameOverCanvasGroup == null)
+                gameOverCanvasGroup =
+                    gameOverPanel.AddComponent<CanvasGroup>();
+        }
+
+        if (revivePanel != null)
+        {
+            if (reviveCanvasGroup == null)
+                reviveCanvasGroup =
+                    revivePanel.GetComponent<CanvasGroup>();
+
+            if (reviveCanvasGroup == null)
+                reviveCanvasGroup =
+                    revivePanel.AddComponent<CanvasGroup>();
+        }
+
+        if (backdrop != null)
+        {
+            if (backdropCanvasGroup == null)
+                backdropCanvasGroup =
+                    backdrop.GetComponent<CanvasGroup>();
+
+            if (backdropCanvasGroup == null)
+                backdropCanvasGroup =
+                    backdrop.AddComponent<CanvasGroup>();
+        }
+
+        if (gameOverPanelRect != null)
+            gameOverBaseScale =
+                gameOverPanelRect.localScale;
+
+        if (revivePanelRect != null)
+            reviveBaseScale =
+                revivePanelRect.localScale;
+    }
+
+    // =====================================================================
+    // AUDIO SETUP
+    // =====================================================================
+
+    private void SetupAudio()
+    {
+        if (gameOverAudioSource == null)
+            return;
+
+        gameOverAudioSource.playOnAwake = false;
+        gameOverAudioSource.loop = false;
+
+        // Cho phép âm thanh UI Game Over phát ngay cả khi
+        // AudioListener.pause = true.
+        gameOverAudioSource.ignoreListenerPause = true;
+    }
+
+    private void PlayGameOverPanelOpenSound()
+    {
+        if (gameOverPanelOpenSoundPlayed)
+            return;
+
+        if (gameOverPanelOpenClip == null)
+            return;
+
+        if (gameOverAudioSource == null)
+            return;
+
+        gameOverPanelOpenSoundPlayed = true;
+
+        gameOverAudioSource.PlayOneShot(
+            gameOverPanelOpenClip,
+            Mathf.Clamp01(gameOverPanelOpenVolume)
+        );
+    }
+
+    // =====================================================================
     // BUTTON SETUP
-    //=============================================================
+    // =====================================================================
 
     private void SetupButtons()
     {
         if (retryButton != null)
         {
-            retryButton.onClick.RemoveListener(Retry);
-            retryButton.onClick.RemoveListener(
-                HandleRetryButtonClick
-            );
-
+            retryButton.onClick.RemoveAllListeners();
             retryButton.onClick.AddListener(Retry);
         }
 
         if (mainMenuButton != null)
         {
-            mainMenuButton.onClick.RemoveListener(
-                GoToMainMenu
-            );
+            mainMenuButton.onClick.RemoveAllListeners();
+            mainMenuButton.onClick.AddListener(GoToMainMenu);
+        }
 
-            mainMenuButton.onClick.RemoveListener(
-                HandleMainMenuButtonClick
-            );
-
-            mainMenuButton.onClick.AddListener(
-                GoToMainMenu
+        if (reviveButton != null)
+        {
+            reviveButton.onClick.RemoveAllListeners();
+            reviveButton.onClick.AddListener(
+                HandleReviveButtonClick
             );
         }
     }
 
-
-    //=============================================================
-    // POINTER GUARD SETUP
-    //=============================================================
+    // =====================================================================
+    // POINTER GUARDS
+    // =====================================================================
 
     private void SetupPointerGuards()
     {
@@ -313,10 +377,9 @@ public class GameOverUIController : MonoBehaviour
 
             guard.Initialize(
                 this,
-                GameOverButtonPointerGuard.ButtonType.Retry
+                ButtonType.Retry
             );
         }
-
 
         if (mainMenuButton != null)
         {
@@ -333,141 +396,665 @@ public class GameOverUIController : MonoBehaviour
 
             guard.Initialize(
                 this,
-                GameOverButtonPointerGuard.ButtonType.MainMenu
+                ButtonType.MainMenu
             );
         }
     }
 
+    private enum ButtonType
+    {
+        Retry,
+        MainMenu
+    }
 
-    //=============================================================
-    // POINTER DOWN
-    //=============================================================
-    //
-    // FIX CS0051:
-    // Method này là PRIVATE vì ButtonType nằm trong private class.
-    //
-    // Nested class bên dưới vẫn gọi được method private này.
-    //=============================================================
-
-    private void NotifyPointerDown(
-        GameOverButtonPointerGuard.ButtonType buttonType
-    )
+    private void NotifyPointerDown(ButtonType buttonType)
     {
         if (!pointerInputEnabled)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                $"PointerDown bị bỏ qua | Button={buttonType} | " +
-                "Pointer input chưa được ENABLE.",
-                this
-            );
-
             return;
-        }
 
+        if (!buttonsUnlocked)
+            return;
 
-        if (buttonType ==
-            GameOverButtonPointerGuard.ButtonType.Retry)
-        {
+        if (transitionStarted)
+            return;
+
+        if (buttonType == ButtonType.Retry)
             retryPointerArmed = true;
 
-            Debug.Log(
-                "[GameOverUIController] " +
-                "RETRY PointerDown hợp lệ -> ARMED.",
-                this
-            );
-        }
-
-
-        if (buttonType ==
-            GameOverButtonPointerGuard.ButtonType.MainMenu)
-        {
+        if (buttonType == ButtonType.MainMenu)
             mainMenuPointerArmed = true;
-
-            Debug.Log(
-                "[GameOverUIController] " +
-                "MAIN MENU PointerDown hợp lệ -> ARMED.",
-                this
-            );
-        }
     }
 
+    // =====================================================================
+    // DEATH PENDING
+    // =====================================================================
 
-    //=============================================================
-    // BUTTON WRAPPERS
-    //=============================================================
-
-    private void HandleRetryButtonClick()
+    private void HandleDeathPending()
     {
+        if (gameOverSequenceStarted)
+            return;
+
+        GameManager gameManager = GameManager.Instance;
+
+        if (gameManager == null)
+            return;
+
+        StartReviveSequence();
+
         Debug.Log(
-            "[GameOverUIController] " +
-            "WARNING: HandleRetryButtonClick() được gọi.",
-            this
+            "[GameOverUIController] DEATH PENDING | " +
+            "Revive timer = " +
+            gameManager.ReviveDecisionTimeRemaining.ToString("F2") +
+            "s"
+        );
+    }
+
+    // =====================================================================
+    // REVIVE SEQUENCE
+    // =====================================================================
+
+    private void StartReviveSequence()
+    {
+        StopTransitionRoutine();
+        StopReviveUnlockRoutine();
+
+        gameOverSequenceStarted = false;
+
+        revivePanelShowing = false;
+        reviveButtonUnlocked = false;
+        reviveTransitionStarted = false;
+
+        buttonsUnlocked = false;
+        pointerInputEnabled = false;
+        transitionStarted = false;
+
+        retryPointerArmed = false;
+        mainMenuPointerArmed = false;
+
+        if (retryButton != null)
+            retryButton.interactable = false;
+
+        if (mainMenuButton != null)
+            mainMenuButton.interactable = false;
+
+        GameManager gameManager = GameManager.Instance;
+
+        if (gameManager == null)
+            return;
+
+        reviveTimerInitialDuration =
+            Mathf.Max(
+                gameManager.ReviveDecisionTimeRemaining,
+                0.0001f
+            );
+
+        transitionRoutine =
+            StartCoroutine(
+                ReviveSequence()
+            );
+    }
+
+    private IEnumerator ReviveSequence()
+    {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        HideGameOverImmediate();
+
+        PrepareReviveVisual();
+
+        float delay = Mathf.Max(
+            reviveShowDelay,
+            0f
         );
 
-        if (!buttonsUnlocked)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Retry input bị chặn vì Button chưa unlock.",
-                this
-            );
+        float timer = 0f;
 
-            return;
+        while (timer < delay)
+        {
+            GameManager gameManager =
+                GameManager.Instance;
+
+            if (gameManager == null)
+                yield break;
+
+            if (!gameManager.IsDeathPending)
+                yield break;
+
+            timer += Time.unscaledDeltaTime;
+
+            yield return null;
         }
 
-        if (!retryPointerArmed)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Retry bị chặn: không có PointerDown mới.",
-                this
-            );
+        GameManager currentManager =
+            GameManager.Instance;
 
-            return;
-        }
+        if (currentManager == null)
+            yield break;
 
-        Retry();
-    }
+        if (!currentManager.IsDeathPending)
+            yield break;
 
+        revivePanelShowing = true;
 
-    private void HandleMainMenuButtonClick()
-    {
-        Debug.Log(
-            "[GameOverUIController] " +
-            "WARNING: HandleMainMenuButtonClick() được gọi.",
-            this
+        yield return StartCoroutine(
+            FadeReviveIn()
         );
 
-        if (!buttonsUnlocked)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Main Menu input bị chặn vì Button chưa unlock.",
-                this
+        if (!revivePanelShowing)
+            yield break;
+
+        UpdateReviveUI();
+
+        StopReviveUnlockRoutine();
+
+        reviveUnlockRoutine =
+            StartCoroutine(
+                UnlockReviveButtonNextFrame()
             );
 
-            return;
-        }
+        transitionRoutine = null;
 
-        if (!mainMenuPointerArmed)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Main Menu bị chặn: không có PointerDown mới.",
-                this
-            );
-
-            return;
-        }
-
-        GoToMainMenu();
+        Debug.Log(
+            "[GameOverUIController] REVIVE PANEL FADED IN."
+        );
     }
 
+    // =====================================================================
+    // REVIVE VISUAL
+    // =====================================================================
 
-    //=============================================================
-    // GAME OVER SEQUENCE
-    //=============================================================
+    private void PrepareReviveVisual()
+    {
+        if (backdrop != null)
+        {
+            backdrop.SetActive(true);
+
+            if (backdropCanvasGroup != null)
+                backdropCanvasGroup.alpha = 0f;
+        }
+
+        if (revivePanel != null)
+        {
+            revivePanel.SetActive(true);
+
+            if (reviveCanvasGroup != null)
+                reviveCanvasGroup.alpha = 0f;
+
+            if (revivePanelRect != null)
+            {
+                revivePanelRect.localScale =
+                    reviveBaseScale *
+                    hiddenScale;
+            }
+        }
+
+        if (gameOverPanel != null)
+            gameOverPanel.SetActive(false);
+    }
+
+    private IEnumerator FadeReviveIn()
+    {
+        float duration =
+            Mathf.Max(
+                fadeDuration,
+                0f
+            );
+
+        if (duration <= 0f)
+        {
+            if (backdropCanvasGroup != null)
+                backdropCanvasGroup.alpha = 1f;
+
+            if (reviveCanvasGroup != null)
+                reviveCanvasGroup.alpha = 1f;
+
+            if (revivePanelRect != null)
+                revivePanelRect.localScale =
+                    reviveBaseScale;
+
+            yield break;
+        }
+
+        float timer = 0f;
+
+        while (timer < duration)
+        {
+            timer += Time.unscaledDeltaTime;
+
+            float t =
+                Mathf.Clamp01(
+                    timer / duration
+                );
+
+            float eased =
+                1f -
+                Mathf.Pow(
+                    1f - t,
+                    3f
+                );
+
+            if (backdropCanvasGroup != null)
+                backdropCanvasGroup.alpha =
+                    eased;
+
+            if (reviveCanvasGroup != null)
+                reviveCanvasGroup.alpha =
+                    eased;
+
+            if (revivePanelRect != null)
+            {
+                revivePanelRect.localScale =
+                    Vector3.LerpUnclamped(
+                        reviveBaseScale *
+                        hiddenScale,
+                        reviveBaseScale,
+                        eased
+                    );
+            }
+
+            yield return null;
+        }
+
+        if (backdropCanvasGroup != null)
+            backdropCanvasGroup.alpha = 1f;
+
+        if (reviveCanvasGroup != null)
+            reviveCanvasGroup.alpha = 1f;
+
+        if (revivePanelRect != null)
+            revivePanelRect.localScale =
+                reviveBaseScale;
+    }
+
+    // =====================================================================
+    // REVIVE BUTTON
+    // =====================================================================
+
+    private IEnumerator UnlockReviveButtonNextFrame()
+    {
+        yield return null;
+
+        reviveUnlockRoutine = null;
+
+        if (!revivePanelShowing)
+            yield break;
+
+        GameManager gameManager =
+            GameManager.Instance;
+
+        if (gameManager == null)
+            yield break;
+
+        reviveButtonUnlocked =
+            gameManager.CanRevive;
+
+        if (reviveButton != null)
+            reviveButton.interactable =
+                reviveButtonUnlocked;
+
+        UpdateReviveUI();
+    }
+
+    private void HandleReviveButtonClick()
+    {
+        if (!revivePanelShowing)
+            return;
+
+        if (!reviveButtonUnlocked)
+            return;
+
+        if (reviveTransitionStarted)
+            return;
+
+        GameManager gameManager =
+            GameManager.Instance;
+
+        if (gameManager == null)
+            return;
+
+        if (!gameManager.CanRevive)
+        {
+            reviveButtonUnlocked = false;
+
+            if (reviveButton != null)
+                reviveButton.interactable = false;
+
+            UpdateReviveUI();
+
+            return;
+        }
+
+        reviveTransitionStarted = true;
+        reviveButtonUnlocked = false;
+
+        if (reviveButton != null)
+            reviveButton.interactable = false;
+
+        bool revived =
+            gameManager.TryRevive();
+
+        if (!revived)
+        {
+            reviveTransitionStarted = false;
+
+            reviveButtonUnlocked =
+                gameManager.CanRevive;
+
+            if (reviveButton != null)
+                reviveButton.interactable =
+                    reviveButtonUnlocked;
+
+            UpdateReviveUI();
+
+            return;
+        }
+
+        Debug.Log(
+            "[GameOverUIController] REVIVE REQUEST ACCEPTED."
+        );
+    }
+
+    // =====================================================================
+    // REVIVE SUCCESS
+    // =====================================================================
+
+    private void HandleRevive()
+    {
+        StopTransitionRoutine();
+        StopReviveUnlockRoutine();
+
+        reviveTransitionStarted = true;
+        reviveButtonUnlocked = false;
+
+        buttonsUnlocked = false;
+        pointerInputEnabled = false;
+
+        retryPointerArmed = false;
+        mainMenuPointerArmed = false;
+
+        if (reviveButton != null)
+            reviveButton.interactable = false;
+
+        StartCoroutine(
+            ReviveExitSequence()
+        );
+    }
+
+    private IEnumerator ReviveExitSequence()
+    {
+        yield return StartCoroutine(
+            FadeReviveOut()
+        );
+
+        HideEverythingImmediate();
+
+        revivePanelShowing = false;
+        reviveTransitionStarted = false;
+
+        Debug.Log(
+            "[GameOverUIController] REVIVE UI CLOSED."
+        );
+    }
+
+    // =====================================================================
+    // REVIVE FADE OUT
+    // =====================================================================
+
+    private IEnumerator FadeReviveOut()
+    {
+        if (revivePanel == null)
+            yield break;
+
+        float duration =
+            Mathf.Max(
+                fadeDuration,
+                0f
+            );
+
+        float startAlpha =
+            reviveCanvasGroup != null
+                ? reviveCanvasGroup.alpha
+                : 1f;
+
+        float startBackdropAlpha =
+            backdropCanvasGroup != null
+                ? backdropCanvasGroup.alpha
+                : 1f;
+
+        Vector3 startScale =
+            revivePanelRect != null
+                ? revivePanelRect.localScale
+                : reviveBaseScale;
+
+        if (duration <= 0f)
+        {
+            if (reviveCanvasGroup != null)
+                reviveCanvasGroup.alpha = 0f;
+
+            if (backdropCanvasGroup != null)
+                backdropCanvasGroup.alpha = 0f;
+
+            yield break;
+        }
+
+        float timer = 0f;
+
+        while (timer < duration)
+        {
+            timer += Time.unscaledDeltaTime;
+
+            float t =
+                Mathf.Clamp01(
+                    timer / duration
+                );
+
+            float eased =
+                t * t;
+
+            if (reviveCanvasGroup != null)
+                reviveCanvasGroup.alpha =
+                    Mathf.Lerp(
+                        startAlpha,
+                        0f,
+                        eased
+                    );
+
+            if (backdropCanvasGroup != null)
+                backdropCanvasGroup.alpha =
+                    Mathf.Lerp(
+                        startBackdropAlpha,
+                        0f,
+                        eased
+                    );
+
+            if (revivePanelRect != null)
+            {
+                revivePanelRect.localScale =
+                    Vector3.Lerp(
+                        startScale,
+                        reviveBaseScale *
+                        hiddenScale,
+                        eased
+                    );
+            }
+
+            yield return null;
+        }
+
+        if (reviveCanvasGroup != null)
+            reviveCanvasGroup.alpha = 0f;
+
+        if (backdropCanvasGroup != null)
+            backdropCanvasGroup.alpha = 0f;
+
+        if (revivePanelRect != null)
+            revivePanelRect.localScale =
+                reviveBaseScale *
+                hiddenScale;
+    }
+
+    // =====================================================================
+    // REVIVE UI
+    // =====================================================================
+
+    private void UpdateReviveUI()
+    {
+        if (!revivePanelShowing)
+            return;
+
+        GameManager gameManager =
+            GameManager.Instance;
+
+        if (gameManager == null)
+            return;
+
+        int cost =
+            gameManager.ReviveGemCost;
+
+        int currentGem =
+            gameManager.GetGem();
+
+        float remaining =
+            Mathf.Max(
+                gameManager.ReviveDecisionTimeRemaining,
+                0f
+            );
+
+        bool isPending =
+            gameManager.IsDeathPending;
+
+        bool hasUsedRevive =
+            gameManager.HasUsedRevive;
+
+        bool timerAvailable =
+            remaining > 0f;
+
+        bool hasEnoughGem =
+            currentGem >= cost;
+
+        bool canRevive =
+            gameManager.CanRevive;
+
+        if (reviveCostValue != null)
+        {
+            reviveCostValue.SetText(
+                "{0} GEM",
+                cost
+            );
+        }
+
+        if (reviveGemValue != null)
+        {
+            reviveGemValue.SetText(
+                "{0}",
+                currentGem
+            );
+        }
+
+        if (reviveTimerValue != null)
+        {
+            reviveTimerValue.SetText(
+                "{0:0.0}",
+                remaining
+            );
+        }
+
+        if (reviveTimerFill != null)
+        {
+            float normalized =
+                reviveTimerInitialDuration > 0f
+                    ? remaining /
+                      reviveTimerInitialDuration
+                    : 0f;
+
+            normalized =
+                Mathf.Clamp01(
+                    normalized
+                );
+
+            reviveTimerFill.fillAmount =
+                normalized;
+
+            if (normalized <= 0.33f)
+            {
+                reviveTimerFill.color =
+                    new Color(
+                        1f,
+                        0.30f,
+                        0.30f,
+                        1f
+                    );
+            }
+            else if (normalized <= 0.66f)
+            {
+                reviveTimerFill.color =
+                    new Color(
+                        1f,
+                        0.70f,
+                        0.15f,
+                        1f
+                    );
+            }
+            else
+            {
+                reviveTimerFill.color =
+                    new Color(
+                        0.10f,
+                        0.90f,
+                        0.70f,
+                        1f
+                    );
+            }
+        }
+
+        if (reviveStatusValue != null)
+        {
+            if (!isPending ||
+                !timerAvailable)
+            {
+                reviveStatusValue.SetText(
+                    "ĐÃ HẾT THỜI GIAN HỒI SINH"
+                );
+            }
+            else if (hasUsedRevive)
+            {
+                reviveStatusValue.SetText(
+                    "ĐÃ SỬ DỤNG HỒI SINH TRONG VÁN NÀY"
+                );
+            }
+            else if (!hasEnoughGem)
+            {
+                reviveStatusValue.SetText(
+                    "KHÔNG ĐỦ GEM"
+                );
+            }
+            else if (canRevive)
+            {
+                reviveStatusValue.SetText(
+                    "SẴN SÀNG HỒI SINH"
+                );
+            }
+            else
+            {
+                reviveStatusValue.SetText(
+                    "KHÔNG THỂ HỒI SINH"
+                );
+            }
+        }
+
+        if (reviveButton != null)
+        {
+            reviveButton.interactable =
+                reviveButtonUnlocked &&
+                canRevive &&
+                !reviveTransitionStarted;
+        }
+    }
+
+    // =====================================================================
+    // FINAL GAME OVER
+    // =====================================================================
 
     private void StartGameOverSequence()
     {
@@ -476,542 +1063,383 @@ public class GameOverUIController : MonoBehaviour
 
         gameOverSequenceStarted = true;
 
-        pointerInputEnabled = false;
-        retryPointerArmed = false;
-        mainMenuPointerArmed = false;
+        StopTransitionRoutine();
+        StopReviveUnlockRoutine();
 
-        DisableEventSystemNavigation();
-
-        if (gameOverRoutine != null)
-        {
-            StopCoroutine(gameOverRoutine);
-        }
-
-        gameOverRoutine =
-            StartCoroutine(GameOverSequence());
-    }
-
-
-    private IEnumerator GameOverSequence()
-    {
-        Time.timeScale = 1f;
+        revivePanelShowing = false;
+        reviveButtonUnlocked = false;
+        reviveTransitionStarted = false;
 
         buttonsUnlocked = false;
-
+        pointerInputEnabled = false;
         transitionStarted = false;
 
-        pointerInputEnabled = false;
         retryPointerArmed = false;
         mainMenuPointerArmed = false;
 
-        LockButtons();
+        gameOverPanelOpenSoundPlayed = false;
 
-        DisableEventSystemNavigation();
-        ClearEventSystemSelection();
+        if (reviveButton != null)
+            reviveButton.interactable = false;
 
+        if (transitionRoutine != null)
+            StopCoroutine(transitionRoutine);
 
-        //---------------------------------------------------------
-        // HIDE PANEL
-        //---------------------------------------------------------
+        transitionRoutine =
+            StartCoroutine(
+                FinalGameOverSequence()
+            );
+    }
 
-        if (gameOverPanel != null)
+    private IEnumerator FinalGameOverSequence()
+    {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        // ================================================================
+        // 1. FADE REVIVE OUT
+        // ================================================================
+
+        if (revivePanel != null &&
+            revivePanel.activeSelf)
         {
-            gameOverPanel.SetActive(false);
+            yield return StartCoroutine(
+                FadeReviveOut()
+            );
         }
 
+        if (revivePanel != null)
+            revivePanel.SetActive(false);
 
-        //---------------------------------------------------------
-        // DEATH HOLD
-        //---------------------------------------------------------
-
-        float timer = 0f;
-
-        while (timer < gameOverDelay)
-        {
-            timer += Time.unscaledDeltaTime;
-
-            DisableEventSystemNavigation();
-            ClearEventSystemSelection();
-
-            yield return null;
-        }
-
-
-        //---------------------------------------------------------
-        // UPDATE RESULT UI
-        //---------------------------------------------------------
+        // ================================================================
+        // 2. UPDATE RESULT
+        // ================================================================
 
         UpdateResultUI();
 
-
-        //---------------------------------------------------------
-        // EXP
-        //---------------------------------------------------------
-
         GrantRunExp();
-
         UpdateExpUI();
 
-
-        //---------------------------------------------------------
-        // PAUSE
-        //---------------------------------------------------------
+        // ================================================================
+        // 3. PAUSE GAME
+        // ================================================================
 
         Time.timeScale = 0f;
 
-
-        //---------------------------------------------------------
-        // AUDIO
-        //---------------------------------------------------------
-
         if (muteAllAudioOnGameOver)
-        {
             AudioListener.pause = true;
-        }
 
+        // ================================================================
+        // 4. SHOW GAME OVER
+        // ================================================================
 
-        //---------------------------------------------------------
-        // LOCK
-        //---------------------------------------------------------
+        PrepareGameOverVisual();
 
-        LockButtons();
-
-        DisableEventSystemNavigation();
-        ClearEventSystemSelection();
-
-
-        //---------------------------------------------------------
-        // SHOW PANEL
-        //---------------------------------------------------------
-
-        if (gameOverPanel != null)
-        {
-            Debug.Log(
-                "[GameOverUIController] SHOW PANEL BEFORE | " +
-                $"Name={gameOverPanel.name} | " +
-                $"ActiveSelf={gameOverPanel.activeSelf} | " +
-                $"ActiveInHierarchy={gameOverPanel.activeInHierarchy} | " +
-                $"Parent={(gameOverPanel.transform.parent != null ? gameOverPanel.transform.parent.name : "NULL")}",
-                this
-            );
-
-            gameOverPanel.SetActive(true);
-
-            Debug.Log(
-                "[GameOverUIController] SHOW PANEL AFTER | " +
-                $"ActiveSelf={gameOverPanel.activeSelf} | " +
-                $"ActiveInHierarchy={gameOverPanel.activeInHierarchy}",
-                this
-            );
-        }
-        else
-        {
-            Debug.LogError(
-                "[GameOverUIController] " +
-                "GAME OVER PANEL = NULL KHI SHOW!",
-                this
-            );
-        }
-
-
-        //---------------------------------------------------------
-        // INITIAL VISUAL STATE
-        //---------------------------------------------------------
-
-        if (canvasGroup != null)
-        {
-            canvasGroup.alpha = 0f;
-        }
-
-        if (panelRect != null)
-        {
-            panelRect.localScale =
-                panelBaseScale * hiddenScale;
-        }
-
-        isShowing = true;
-
-
-        //---------------------------------------------------------
-        // FADE
-        //---------------------------------------------------------
-
-        yield return StartCoroutine(FadeIn());
-
-
-        if (canvasGroup != null)
-        {
-            canvasGroup.alpha = 1f;
-        }
-
-        if (panelRect != null)
-        {
-            panelRect.localScale =
-                panelBaseScale;
-        }
-
-
-        //---------------------------------------------------------
-        // INPUT SAFETY DELAY
-        //---------------------------------------------------------
-
-        Debug.Log(
-            "[GameOverUIController] " +
-            "FadeIn hoàn tất. Bắt đầu Input Safety Delay.",
-            this
+        yield return StartCoroutine(
+            FadeGameOverIn()
         );
 
+        // ================================================================
+        // 4.5. GAME OVER PANEL AUDIO
+        // ================================================================
 
-        float unlockTimer = 0f;
+        PlayGameOverPanelOpenSound();
 
-        while (unlockTimer < buttonUnlockDelay)
+        // ================================================================
+        // 5. UNLOCK BUTTONS
+        // ================================================================
+
+        float unlockDelay =
+            Mathf.Max(
+                buttonUnlockDelay,
+                0f
+            );
+
+        float timer = 0f;
+
+        while (timer < unlockDelay)
         {
-            unlockTimer +=
+            timer +=
                 Time.unscaledDeltaTime;
-
-            pointerInputEnabled = false;
-
-            retryPointerArmed = false;
-            mainMenuPointerArmed = false;
-
-            DisableEventSystemNavigation();
-            ClearEventSystemSelection();
 
             yield return null;
         }
 
+        UnlockFinalButtons();
 
-        //---------------------------------------------------------
-        // CLEAR EVENT SYSTEM
-        //---------------------------------------------------------
-
-        DisableEventSystemNavigation();
-        ClearEventSystemSelection();
-
-
-        //---------------------------------------------------------
-        // UNLOCK BUTTON
-        //---------------------------------------------------------
-
-        UnlockButtons();
-
-
-        //---------------------------------------------------------
-        // IMPORTANT:
-        // Button được unlock nhưng chưa được ARM.
-        //---------------------------------------------------------
-
-        pointerInputEnabled = true;
-
-        retryPointerArmed = false;
-        mainMenuPointerArmed = false;
-
-
-        //---------------------------------------------------------
-        // KEEP NAVIGATION OFF
-        //---------------------------------------------------------
-
-        DisableEventSystemNavigation();
-        ClearEventSystemSelection();
-
-
-        //---------------------------------------------------------
-        // WAIT ONE FRAME
-        //---------------------------------------------------------
-
-        yield return null;
-
-
-        retryPointerArmed = false;
-        mainMenuPointerArmed = false;
-
-        ClearEventSystemSelection();
-
-
-        //---------------------------------------------------------
-        // READY
-        //---------------------------------------------------------
-
-        transitionStarted = false;
-
+        transitionRoutine = null;
 
         Debug.Log(
-            "[GameOverUIController] " +
-            "GAME OVER PANEL READY | Buttons unlocked.",
-            this
+            "[GameOverUIController] FINAL GAME OVER READY."
         );
-
-
-        if (EventSystem.current != null)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                $"EVENT SYSTEM STATE | " +
-                $"sendNavigationEvents={EventSystem.current.sendNavigationEvents} | " +
-                $"Selected={(EventSystem.current.currentSelectedGameObject != null ? EventSystem.current.currentSelectedGameObject.name : "NULL")} | " +
-                $"PointerInputEnabled={pointerInputEnabled} | " +
-                $"RetryArmed={retryPointerArmed} | " +
-                $"MainMenuArmed={mainMenuPointerArmed}",
-                this
-            );
-        }
     }
 
+    // =====================================================================
+    // GAME OVER VISUAL
+    // =====================================================================
 
-    //=============================================================
-    // BUTTON LOCK / UNLOCK
-    //=============================================================
-
-    private void LockButtons()
+    private void PrepareGameOverVisual()
     {
-        buttonsUnlocked = false;
+        if (backdrop != null)
+            backdrop.SetActive(true);
 
-        if (retryButton != null)
-        {
-            retryButton.interactable = false;
-        }
+        if (backdropCanvasGroup != null)
+            backdropCanvasGroup.alpha = 1f;
 
-        if (mainMenuButton != null)
+        if (gameOverPanel != null)
         {
-            mainMenuButton.interactable = false;
+            gameOverPanel.SetActive(true);
+
+            if (gameOverCanvasGroup != null)
+                gameOverCanvasGroup.alpha = 0f;
+
+            if (gameOverPanelRect != null)
+            {
+                gameOverPanelRect.localScale =
+                    gameOverBaseScale *
+                    hiddenScale;
+            }
         }
     }
 
+    private IEnumerator FadeGameOverIn()
+    {
+        float duration =
+            Mathf.Max(
+                fadeDuration,
+                0f
+            );
 
-    private void UnlockButtons()
+        if (duration <= 0f)
+        {
+            if (gameOverCanvasGroup != null)
+                gameOverCanvasGroup.alpha = 1f;
+
+            if (gameOverPanelRect != null)
+                gameOverPanelRect.localScale =
+                    gameOverBaseScale;
+
+            yield break;
+        }
+
+        float timer = 0f;
+
+        while (timer < duration)
+        {
+            timer +=
+                Time.unscaledDeltaTime;
+
+            float t =
+                Mathf.Clamp01(
+                    timer / duration
+                );
+
+            float eased =
+                1f -
+                Mathf.Pow(
+                    1f - t,
+                    3f
+                );
+
+            if (gameOverCanvasGroup != null)
+            {
+                gameOverCanvasGroup.alpha =
+                    eased;
+            }
+
+            if (gameOverPanelRect != null)
+            {
+                gameOverPanelRect.localScale =
+                    Vector3.LerpUnclamped(
+                        gameOverBaseScale *
+                        hiddenScale,
+                        gameOverBaseScale,
+                        eased
+                    );
+            }
+
+            yield return null;
+        }
+
+        if (gameOverCanvasGroup != null)
+            gameOverCanvasGroup.alpha = 1f;
+
+        if (gameOverPanelRect != null)
+            gameOverPanelRect.localScale =
+                gameOverBaseScale;
+    }
+
+    // =====================================================================
+    // FINAL BUTTONS
+    // =====================================================================
+
+    private void UnlockFinalButtons()
     {
         buttonsUnlocked = true;
+        pointerInputEnabled = true;
 
         if (retryButton != null)
-        {
             retryButton.interactable = true;
-        }
 
         if (mainMenuButton != null)
-        {
             mainMenuButton.interactable = true;
-        }
+
+        EventSystem eventSystem =
+            EventSystem.current;
+
+        if (eventSystem != null)
+            eventSystem.SetSelectedGameObject(null);
     }
 
+    // =====================================================================
+    // RESULT
+    // =====================================================================
 
-    //=============================================================
-    // EVENT SYSTEM
-    //=============================================================
-
-    private void DisableEventSystemNavigation()
+    private void UpdateResultUI()
     {
-        if (EventSystem.current == null)
+        GameManager gameManager =
+            GameManager.Instance;
+
+        if (gameManager == null)
             return;
 
+        int score =
+            gameManager.ScoreInt;
 
-        if (!eventSystemStateCaptured)
+        int highScore = 0;
+
+        int coins =
+            gameManager.CoinCount;
+
+        FirestorePlayerDataManager firestoreManager =
+            FirestorePlayerDataManager.Instance;
+
+        if (firestoreManager != null &&
+            firestoreManager.CurrentPlayerData != null)
         {
-            previousSendNavigationEvents =
-                EventSystem.current.sendNavigationEvents;
-
-            eventSystemStateCaptured = true;
+            highScore =
+                firestoreManager.CurrentPlayerData.bestScore;
         }
 
+        if (scoreValue != null)
+            scoreValue.SetText(
+                "{0}",
+                score
+            );
 
-        EventSystem.current.sendNavigationEvents = false;
+        if (highScoreValue != null)
+            highScoreValue.SetText(
+                "{0}",
+                highScore
+            );
 
-        EventSystem.current.SetSelectedGameObject(null);
+        if (coinValue != null)
+            coinValue.SetText(
+                "{0}",
+                coins
+            );
     }
 
-
-    private void RestoreEventSystemNavigation()
-    {
-        if (EventSystem.current == null)
-            return;
-
-
-        if (eventSystemStateCaptured)
-        {
-            EventSystem.current.sendNavigationEvents =
-                previousSendNavigationEvents;
-
-            eventSystemStateCaptured = false;
-        }
-
-
-        EventSystem.current.SetSelectedGameObject(null);
-    }
-
-
-    private void ClearEventSystemSelection()
-    {
-        if (EventSystem.current != null)
-        {
-            EventSystem.current.SetSelectedGameObject(null);
-        }
-    }
-
-
-    //=============================================================
+    // =====================================================================
     // EXP
-    //=============================================================
+    // =====================================================================
 
     private void GrantRunExp()
     {
         if (expRewardGranted)
-        {
             return;
-        }
-
 
         PlayerProgression progression =
             FindFirstObjectByType<PlayerProgression>();
 
-
         if (progression == null)
         {
             Debug.LogWarning(
-                "[GameOverUIController] " +
-                "Không tìm thấy PlayerProgression. " +
-                "Không thể cộng EXP.",
-                this
+                "[GameOverUIController] PlayerProgression not found."
             );
 
             return;
         }
 
+        GameManager gameManager =
+            GameManager.Instance;
 
-        if (GameManager.Instance == null)
-        {
-            Debug.LogWarning(
-                "[GameOverUIController] " +
-                "Không tìm thấy GameManager. " +
-                "Không thể tính EXP.",
-                this
-            );
-
+        if (gameManager == null)
             return;
-        }
-
 
         levelBeforeRun =
             progression.Level;
 
-
-        float distance =
+        int distance =
             GetRunDistance();
 
+        int coins =
+            gameManager.CoinCount;
 
         int distanceExp = 0;
 
-
-        if (distancePerExpStep > 0f)
+        if (distancePerExpStep > 0 &&
+            expPerDistanceStep > 0)
         {
-            int distanceSteps =
-                Mathf.FloorToInt(
-                    distance /
-                    distancePerExpStep
-                );
-
-
             distanceExp =
-                distanceSteps *
+                (distance /
+                 distancePerExpStep) *
                 expPerDistanceStep;
         }
 
-
-        int coins =
-            Mathf.Max(
-                0,
-                GameManager.Instance.CoinCount
-            );
-
-
         int coinExp = 0;
 
-
-        if (coinsPerExpStep > 0)
+        if (coinsPerExpStep > 0 &&
+            expPerCoinStep > 0)
         {
-            int coinSteps =
-                coins /
-                coinsPerExpStep;
-
-
             coinExp =
-                coinSteps *
+                (coins /
+                 coinsPerExpStep) *
                 expPerCoinStep;
         }
-
-
-        int bonusExp =
-            Mathf.Max(
-                0,
-                runCompletionExp
-            );
-
 
         int totalExp =
             distanceExp +
             coinExp +
-            bonusExp;
+            runCompletionExp;
 
+        if (totalExp < 0)
+            totalExp = 0;
 
         lastRunExpReward =
-            Mathf.Max(
-                0,
-                totalExp
-            );
-
+            totalExp;
 
         progression.AddExp(
-            lastRunExpReward
+            totalExp
         );
-
 
         levelAfterRun =
             progression.Level;
-
 
         leveledUpThisRun =
             levelAfterRun >
             levelBeforeRun;
 
-
         expRewardGranted = true;
-
-
-        Debug.Log(
-            "[GameOverUIController] " +
-            "RUN EXP REWARD\n" +
-            $"Distance: {distance:0}m\n" +
-            $"Distance EXP: +{distanceExp}\n" +
-            $"Coins: {coins}\n" +
-            $"Coin EXP: +{coinExp}\n" +
-            $"Run Bonus: +{bonusExp}\n" +
-            $"TOTAL EXP: +{lastRunExpReward}\n" +
-            $"Level Before: {levelBeforeRun}\n" +
-            $"Level After: {levelAfterRun}\n" +
-            $"Level Up: {leveledUpThisRun}\n" +
-            $"Total EXP Saved: {progression.TotalExp}",
-            this
-        );
     }
-
-
-    //=============================================================
-    // EXP UI
-    //=============================================================
 
     private void UpdateExpUI()
     {
         if (expRewardValue != null)
         {
-            expRewardValue.text =
-                $"+{lastRunExpReward:N0} EXP";
+            expRewardValue.SetText(
+                "+{0} EXP",
+                lastRunExpReward
+            );
         }
-
 
         if (levelValue != null)
         {
-            levelValue.text =
-                $"LEVEL {levelAfterRun}";
+            levelValue.SetText(
+                "CẤP {0}",
+                levelAfterRun
+            );
         }
-
 
         if (levelUpValue != null)
         {
@@ -1019,473 +1447,281 @@ public class GameOverUIController : MonoBehaviour
                 leveledUpThisRun
             );
 
-
             if (leveledUpThisRun)
-            {
-                levelUpValue.text =
-                    "LEVEL UP!";
-            }
+                levelUpValue.SetText(
+                    "LÊN CẤP!"
+                );
         }
     }
 
+    // =====================================================================
+    // DISTANCE
+    // =====================================================================
 
-    //=============================================================
-    // GET RUN DISTANCE
-    //=============================================================
-
-    private float GetRunDistance()
+    private int GetRunDistance()
     {
         PlayerController player =
             FindFirstObjectByType<PlayerController>();
 
-
         if (player != null)
         {
-            return Mathf.Max(
-                0f,
-                player.transform.position.z
-            );
-        }
+            float z =
+                player.transform.position.z;
 
-
-        if (GameManager.Instance != null)
-        {
-            return Mathf.Max(
-                0f,
-                GameManager.Instance.Score
-            );
-        }
-
-
-        return 0f;
-    }
-
-
-    //=============================================================
-    // UPDATE RESULT UI
-    //=============================================================
-
-    private void UpdateResultUI()
-    {
-        if (GameManager.Instance == null)
-        {
-            Debug.LogWarning(
-                "[GameOverUIController] " +
-                "Không tìm thấy GameManager.",
-                this
-            );
-
-            return;
-        }
-
-
-        if (scoreValue != null)
-        {
-            scoreValue.text =
-                GameManager.Instance.ScoreInt
-                    .ToString("N0");
-        }
-
-
-        if (highScoreValue != null)
-        {
-            highScoreValue.text =
-                Mathf.FloorToInt(
-                    GameManager.Instance.GetHighScore()
-                )
-                .ToString("N0");
-        }
-
-
-        if (coinValue != null)
-        {
-            coinValue.text =
-                GameManager.Instance.CoinCount
-                    .ToString("N0");
-        }
-    }
-
-
-    //=============================================================
-    // FADE IN
-    //=============================================================
-
-    private IEnumerator FadeIn()
-    {
-        float elapsed = 0f;
-
-
-        float startAlpha =
-            canvasGroup != null
-                ? canvasGroup.alpha
-                : 0f;
-
-
-        Vector3 startScale =
-            panelBaseScale *
-            hiddenScale;
-
-
-        while (elapsed < fadeDuration)
-        {
-            elapsed +=
-                Time.unscaledDeltaTime;
-
-
-            float t =
-                Mathf.Clamp01(
-                    elapsed /
-                    fadeDuration
-                );
-
-
-            t =
-                Mathf.SmoothStep(
-                    0f,
-                    1f,
-                    t
-                );
-
-
-            if (canvasGroup != null)
+            if (z > 0f)
             {
-                canvasGroup.alpha =
-                    Mathf.Lerp(
-                        startAlpha,
-                        1f,
-                        t
-                    );
+                if (z >= int.MaxValue)
+                    return int.MaxValue;
+
+                return Mathf.FloorToInt(z);
             }
-
-
-            if (panelRect != null)
-            {
-                panelRect.localScale =
-                    Vector3.Lerp(
-                        startScale,
-                        panelBaseScale,
-                        t
-                    );
-            }
-
-
-            yield return null;
         }
+
+        GameManager gameManager =
+            GameManager.Instance;
+
+        if (gameManager != null)
+            return gameManager.ScoreInt;
+
+        return 0;
     }
 
-
-    //=============================================================
-    // PANEL ANIMATION
-    //=============================================================
-
-    private void AnimatePanel()
-    {
-        float speed =
-            animationSpeed *
-            Time.unscaledDeltaTime;
-
-
-        if (canvasGroup != null)
-        {
-            canvasGroup.alpha =
-                Mathf.Lerp(
-                    canvasGroup.alpha,
-                    1f,
-                    speed
-                );
-        }
-
-
-        if (panelRect != null)
-        {
-            panelRect.localScale =
-                Vector3.Lerp(
-                    panelRect.localScale,
-                    panelBaseScale,
-                    speed
-                );
-        }
-    }
-
-
-    //=============================================================
-    // HIDE
-    //=============================================================
-
-    private void HideImmediate()
-    {
-        isShowing = false;
-
-        gameOverSequenceStarted = false;
-
-        expRewardGranted = false;
-
-        buttonsUnlocked = false;
-
-        transitionStarted = false;
-
-
-        pointerInputEnabled = false;
-
-        retryPointerArmed = false;
-
-        mainMenuPointerArmed = false;
-
-
-        lastRunExpReward = 0;
-
-        levelBeforeRun = 0;
-
-        levelAfterRun = 0;
-
-        leveledUpThisRun = false;
-
-
-        LockButtons();
-
-
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.SetActive(false);
-        }
-
-
-        if (canvasGroup != null)
-        {
-            canvasGroup.alpha = 0f;
-        }
-
-
-        if (panelRect != null)
-        {
-            panelRect.localScale =
-                panelBaseScale;
-        }
-
-
-        if (levelUpValue != null)
-        {
-            levelUpValue.gameObject.SetActive(false);
-        }
-    }
-
-
-    //=============================================================
+    // =====================================================================
     // RETRY
-    //=============================================================
+    // =====================================================================
 
-    public void Retry()
+    private void Retry()
     {
         if (!buttonsUnlocked)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Retry() bị chặn vì Button chưa được unlock.",
-                this
-            );
-
             return;
-        }
-
 
         if (!retryPointerArmed)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "Retry() bị CHẶN: chưa có PointerDown mới " +
-                "sau khi Game Over Panel READY.",
-                this
-            );
-
             return;
-        }
-
 
         if (transitionStarted)
-        {
             return;
-        }
-
 
         transitionStarted = true;
 
-
-        retryPointerArmed = false;
-
+        buttonsUnlocked = false;
         pointerInputEnabled = false;
 
-
-        Debug.Log(
-            "[GameOverUIController] " +
-            "RETRY() ĐÃ ĐƯỢC GỌI " +
-            "BỞI POINTER INPUT HỢP LỆ!",
-            this
-        );
-
-
-        Debug.Log(
-            "[GameOverUIController] Retry Button = " +
-            (retryButton != null
-                ? retryButton.name
-                : "NULL"),
-            this
-        );
-
-
-        if (EventSystem.current != null)
-        {
-            Debug.Log(
-                "[GameOverUIController] Retry EventSystem | " +
-                $"sendNavigationEvents={EventSystem.current.sendNavigationEvents} | " +
-                $"Selected={(EventSystem.current.currentSelectedGameObject != null ? EventSystem.current.currentSelectedGameObject.name : "NULL")}",
-                this
-            );
-        }
-
-
-        RestoreEventSystemNavigation();
-
+        retryPointerArmed = false;
+        mainMenuPointerArmed = false;
 
         Time.timeScale = 1f;
-
         AudioListener.pause = false;
 
+        RestoreEventSystemState();
+
+        Scene activeScene =
+            SceneManager.GetActiveScene();
 
         SceneManager.LoadScene(
-            SceneManager.GetActiveScene().name
+            activeScene.buildIndex
         );
     }
 
-
-    //=============================================================
+    // =====================================================================
     // MAIN MENU
-    //=============================================================
+    // =====================================================================
 
-    public void GoToMainMenu()
+    private void GoToMainMenu()
     {
         if (!buttonsUnlocked)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "GoToMainMenu() bị chặn vì Button chưa được unlock.",
-                this
-            );
-
             return;
-        }
-
 
         if (!mainMenuPointerArmed)
-        {
-            Debug.Log(
-                "[GameOverUIController] " +
-                "GoToMainMenu() bị CHẶN: chưa có PointerDown mới " +
-                "sau khi Game Over Panel READY.",
-                this
-            );
-
             return;
-        }
-
 
         if (transitionStarted)
-        {
             return;
-        }
-
 
         transitionStarted = true;
 
-
-        mainMenuPointerArmed = false;
-
+        buttonsUnlocked = false;
         pointerInputEnabled = false;
 
-
-        RestoreEventSystemNavigation();
-
-
         Time.timeScale = 1f;
-
         AudioListener.pause = false;
 
+        mainMenuPointerArmed = false;
+        retryPointerArmed = false;
+
+        RestoreEventSystemState();
 
         if (!Application.CanStreamedLevelBeLoaded(
-            mainMenuSceneName))
+                mainMenuSceneName))
         {
-            transitionStarted = false;
-
-            pointerInputEnabled = true;
-
-
             Debug.LogError(
-                $"[GameOverUIController] " +
-                $"Không thể load Scene '{mainMenuSceneName}'. " +
-                "Kiểm tra Build Profiles.",
-                this
+                "[GameOverUIController] Không thể load Scene Main Menu: " +
+                mainMenuSceneName
             );
+
+            transitionStarted = false;
+            buttonsUnlocked = true;
+            pointerInputEnabled = true;
 
             return;
         }
-
 
         SceneManager.LoadScene(
             mainMenuSceneName
         );
     }
 
+    // =====================================================================
+    // HIDE
+    // =====================================================================
 
-    //=============================================================
-    // PUBLIC STATE
-    //=============================================================
-
-    public bool IsShowing
+    private void HideGameOverImmediate()
     {
-        get
+        if (gameOverCanvasGroup != null)
+            gameOverCanvasGroup.alpha = 0f;
+
+        if (gameOverPanelRect != null)
+            gameOverPanelRect.localScale =
+                gameOverBaseScale *
+                hiddenScale;
+
+        if (gameOverPanel != null)
+            gameOverPanel.SetActive(false);
+    }
+
+    private void HideEverythingImmediate()
+    {
+        if (gameOverCanvasGroup != null)
+            gameOverCanvasGroup.alpha = 0f;
+
+        if (reviveCanvasGroup != null)
+            reviveCanvasGroup.alpha = 0f;
+
+        if (backdropCanvasGroup != null)
+            backdropCanvasGroup.alpha = 0f;
+
+        if (gameOverPanelRect != null)
+            gameOverPanelRect.localScale =
+                gameOverBaseScale *
+                hiddenScale;
+
+        if (revivePanelRect != null)
+            revivePanelRect.localScale =
+                reviveBaseScale *
+                hiddenScale;
+
+        if (gameOverPanel != null)
+            gameOverPanel.SetActive(false);
+
+        if (revivePanel != null)
+            revivePanel.SetActive(false);
+
+        if (backdrop != null)
+            backdrop.SetActive(false);
+
+        revivePanelShowing = false;
+        reviveButtonUnlocked = false;
+        reviveTransitionStarted = false;
+
+        buttonsUnlocked = false;
+        pointerInputEnabled = false;
+    }
+
+    // =====================================================================
+    // COROUTINE CONTROL
+    // =====================================================================
+
+    private void StopTransitionRoutine()
+    {
+        if (transitionRoutine != null)
         {
-            return isShowing;
+            StopCoroutine(
+                transitionRoutine
+            );
+
+            transitionRoutine = null;
         }
     }
 
+    private void StopReviveUnlockRoutine()
+    {
+        if (reviveUnlockRoutine != null)
+        {
+            StopCoroutine(
+                reviveUnlockRoutine
+            );
 
-    //=============================================================
-    // POINTER GUARD COMPONENT
-    //=============================================================
+            reviveUnlockRoutine = null;
+        }
+    }
 
-    private class GameOverButtonPointerGuard :
+    // =====================================================================
+    // EVENT SYSTEM
+    // =====================================================================
+
+    private void CaptureEventSystemState()
+    {
+        if (eventSystemStateCaptured)
+            return;
+
+        EventSystem eventSystem =
+            EventSystem.current;
+
+        if (eventSystem == null)
+            return;
+
+        previousSendNavigationEvents =
+            eventSystem.sendNavigationEvents;
+
+        eventSystemStateCaptured = true;
+    }
+
+    private void RestoreEventSystemState()
+    {
+        EventSystem eventSystem =
+            EventSystem.current;
+
+        if (eventSystem == null)
+            return;
+
+        if (eventSystemStateCaptured)
+        {
+            eventSystem.sendNavigationEvents =
+                previousSendNavigationEvents;
+
+            eventSystemStateCaptured = false;
+        }
+        else
+        {
+            eventSystem.sendNavigationEvents = true;
+        }
+
+        eventSystem.SetSelectedGameObject(null);
+    }
+
+    // =====================================================================
+    // POINTER GUARD
+    // =====================================================================
+
+    private sealed class GameOverButtonPointerGuard :
         MonoBehaviour,
         IPointerDownHandler
     {
-        public enum ButtonType
-        {
-            Retry,
-            MainMenu
-        }
-
-
         private GameOverUIController controller;
-
         private ButtonType buttonType;
 
-
         public void Initialize(
-            GameOverUIController target,
-            ButtonType type
-        )
+            GameOverUIController owner,
+            ButtonType type)
         {
-            controller = target;
-
+            controller = owner;
             buttonType = type;
         }
 
-
         public void OnPointerDown(
-            PointerEventData eventData
-        )
+            PointerEventData eventData)
         {
             if (controller == null)
                 return;
-
 
             controller.NotifyPointerDown(
                 buttonType

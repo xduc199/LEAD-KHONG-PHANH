@@ -7,9 +7,17 @@ public class CharacterProfileUI : MonoBehaviour
 {
     public static CharacterProfileUI Instance { get; private set; }
 
+    // ============================================================
+    // MAIN REFERENCES
+    // ============================================================
+
     [Header("Main References")]
     [SerializeField] private GameObject characterPanel;
     [SerializeField] private Button closeButton;
+
+    // ============================================================
+    // CHARACTER
+    // ============================================================
 
     [Header("Character")]
     [SerializeField] private TMP_Text playerNameText;
@@ -17,25 +25,56 @@ public class CharacterProfileUI : MonoBehaviour
     [SerializeField] private TMP_Text descriptionText;
     [SerializeField] private TMP_Text levelLabel;
 
+    // ============================================================
+    // EXP
+    // ============================================================
+
     [Header("EXP")]
     [SerializeField] private TMP_Text expValueText;
+
+    [Tooltip(
+        "Image Fill của thanh EXP chính. " +
+        "Nếu để trống, hệ thống tự tìm object 'Fill' bên trong CharacterPanel."
+    )]
     [SerializeField] private Image expFill;
+
+    // ============================================================
+    // CURRENCY
+    // ============================================================
 
     [Header("Currency")]
     [SerializeField] private TMP_Text coinValueText;
     [SerializeField] private TMP_Text bestValueText;
 
+    // ============================================================
+    // STATS
+    // ============================================================
+
     [Header("Stats")]
     [SerializeField] private TMP_Text runsValueText;
     [SerializeField] private TMP_Text distanceValueText;
+
+    // ============================================================
+    // MINI PROFILE
+    // ============================================================
 
     [Header("Mini Profile - Main Menu")]
     [SerializeField] private Button avatarButton;
     [SerializeField] private TMP_Text miniPlayerNameText;
     [SerializeField] private TMP_Text miniLevelText;
     [SerializeField] private TMP_Text miniExpText;
+
+    [Tooltip(
+        "Image Fill của thanh EXP mini. " +
+        "Nếu để trống, hệ thống tự tìm object 'MiniExpFill' bên trong CharacterMiniPanel."
+    )]
     [SerializeField] private Image miniExpFill;
+
     [SerializeField] private TMP_Text miniCoinText;
+
+    // ============================================================
+    // HIERARCHY NAMES
+    // ============================================================
 
     private const string PanelName = "CharacterPanel";
     private const string CloseButtonName = "CloseButton";
@@ -62,31 +101,39 @@ public class CharacterProfileUI : MonoBehaviour
     private const string MiniExpFillName = "MiniExpFill";
     private const string MiniCoinName = "MiniCoin";
 
+    // ============================================================
+    // DATA SYSTEMS
+    // ============================================================
+
     private PlayerProgression playerProgression;
     private GameManager gameManager;
-
-    // ============================================================
-    // FIRESTORE EVENT SOURCE
-    // ============================================================
-
     private FirestorePlayerDataManager firestoreManager;
 
     private Coroutine refreshCoroutine;
+
+    // ============================================================
+    // CACHE
+    // ============================================================
 
     private int lastLevel = -1;
     private int lastCurrentExp = -1;
     private int lastRequiredExp = -1;
     private int lastTotalCoins = -1;
     private int lastBestScore = -1;
+    private int lastTotalRuns = -1;
 
     private string lastDisplayName = string.Empty;
+
+    // ============================================================
+    // REFRESH
+    // ============================================================
 
     private float refreshTimer;
 
     private const float RefreshInterval = 0.1f;
 
     // ============================================================
-    // AWAKE
+    // UNITY
     // ============================================================
 
     private void Awake()
@@ -103,20 +150,19 @@ public class CharacterProfileUI : MonoBehaviour
         FindDataSystems();
         BindFirestoreEvents();
         SetupButtons();
+        ConfigureExpImages();
 
         if (characterPanel != null)
             characterPanel.SetActive(false);
     }
-
-    // ============================================================
-    // START
-    // ============================================================
 
     private void Start()
     {
         FindReferences();
         FindDataSystems();
         BindFirestoreEvents();
+        SetupButtons();
+        ConfigureExpImages();
 
         RefreshMiniProfileImmediate();
         RefreshProfile(true);
@@ -126,10 +172,6 @@ public class CharacterProfileUI : MonoBehaviour
 
         StartRefreshCoroutine();
     }
-
-    // ============================================================
-    // UPDATE
-    // ============================================================
 
     private void Update()
     {
@@ -144,32 +186,24 @@ public class CharacterProfileUI : MonoBehaviour
         BindFirestoreEvents();
 
         if (!MiniReferencesReady())
-        {
             FindMiniProfileReferences();
-        }
 
         RefreshProfileIfDataChanged();
     }
-
-    // ============================================================
-    // ENABLE
-    // ============================================================
 
     private void OnEnable()
     {
         FindReferences();
         FindDataSystems();
         BindFirestoreEvents();
+        SetupButtons();
+        ConfigureExpImages();
 
         RefreshMiniProfileImmediate();
         RefreshProfile(true);
 
         StartRefreshCoroutine();
     }
-
-    // ============================================================
-    // DISABLE
-    // ============================================================
 
     private void OnDisable()
     {
@@ -181,10 +215,6 @@ public class CharacterProfileUI : MonoBehaviour
             refreshCoroutine = null;
         }
     }
-
-    // ============================================================
-    // DESTROY
-    // ============================================================
 
     private void OnDestroy()
     {
@@ -206,18 +236,21 @@ public class CharacterProfileUI : MonoBehaviour
         if (manager == null)
             return;
 
-        // Đã bind đúng manager rồi.
         if (firestoreManager == manager)
             return;
 
-        // Nếu trước đó đang bind manager cũ thì tháo ra trước.
         UnbindFirestoreEvents();
 
         firestoreManager = manager;
 
-        firestoreManager.OnPlayerDataLoaded += HandlePlayerDataLoaded;
-        firestoreManager.OnPlayerDataSaved += HandlePlayerDataSaved;
-        firestoreManager.OnPlayerDataCleared += HandlePlayerDataCleared;
+        firestoreManager.OnPlayerDataLoaded +=
+            HandlePlayerDataLoaded;
+
+        firestoreManager.OnPlayerDataSaved +=
+            HandlePlayerDataSaved;
+
+        firestoreManager.OnPlayerDataCleared +=
+            HandlePlayerDataCleared;
     }
 
     private void UnbindFirestoreEvents()
@@ -225,64 +258,68 @@ public class CharacterProfileUI : MonoBehaviour
         if (firestoreManager == null)
             return;
 
-        firestoreManager.OnPlayerDataLoaded -= HandlePlayerDataLoaded;
-        firestoreManager.OnPlayerDataSaved -= HandlePlayerDataSaved;
-        firestoreManager.OnPlayerDataCleared -= HandlePlayerDataCleared;
+        firestoreManager.OnPlayerDataLoaded -=
+            HandlePlayerDataLoaded;
+
+        firestoreManager.OnPlayerDataSaved -=
+            HandlePlayerDataSaved;
+
+        firestoreManager.OnPlayerDataCleared -=
+            HandlePlayerDataCleared;
 
         firestoreManager = null;
     }
 
-    // ============================================================
-    // FIRESTORE - PLAYER DATA LOADED
-    // ============================================================
-
     private void HandlePlayerDataLoaded(PlayerData data)
     {
-        // Firebase vừa load tài khoản.
-        // Refresh ngay lập tức, không cần bấm Avatar.
+        ResetCache();
+
         FindReferences();
         FindDataSystems();
+        ConfigureExpImages();
 
         RefreshMiniProfileImmediate();
         RefreshProfile(true);
     }
-
-    // ============================================================
-    // FIRESTORE - PLAYER DATA SAVED
-    // ============================================================
 
     private void HandlePlayerDataSaved(PlayerData data)
     {
-        // Coin / EXP / Level / BestScore vừa được ghi thành công.
-        // Đồng bộ Mini Profile ngay.
+        ResetCache();
+
         FindReferences();
         FindDataSystems();
+        ConfigureExpImages();
+
+        RefreshMiniProfileImmediate();
+        RefreshProfile(true);
+    }
+
+    private void HandlePlayerDataCleared()
+    {
+        ResetCache();
 
         RefreshMiniProfileImmediate();
         RefreshProfile(true);
     }
 
     // ============================================================
-    // FIRESTORE - PLAYER DATA CLEARED
+    // CACHE
     // ============================================================
 
-    private void HandlePlayerDataCleared()
+    private void ResetCache()
     {
-        // Logout / đổi tài khoản.
-        // Xóa cache cũ để tài khoản mới không kế thừa UI cũ.
         lastLevel = -1;
         lastCurrentExp = -1;
         lastRequiredExp = -1;
         lastTotalCoins = -1;
         lastBestScore = -1;
-        lastDisplayName = string.Empty;
+        lastTotalRuns = -1;
 
-        RefreshMiniProfileImmediate();
-        RefreshProfile(true);
+        lastDisplayName = string.Empty;
     }
 
     // ============================================================
-    // START REFRESH COROUTINE
+    // REFRESH COROUTINE
     // ============================================================
 
     private void StartRefreshCoroutine()
@@ -299,46 +336,6 @@ public class CharacterProfileUI : MonoBehaviour
             );
     }
 
-    // ============================================================
-    // DATA CHANGED
-    // ============================================================
-
-    private void RefreshProfileIfDataChanged()
-    {
-        int level;
-        int currentExp;
-        int requiredExp;
-        int totalCoins;
-        int bestScore;
-        string displayName;
-
-        GetProfileData(
-            out level,
-            out currentExp,
-            out requiredExp,
-            out totalCoins,
-            out bestScore,
-            out displayName
-        );
-
-        bool changed =
-            level != lastLevel ||
-            currentExp != lastCurrentExp ||
-            requiredExp != lastRequiredExp ||
-            totalCoins != lastTotalCoins ||
-            bestScore != lastBestScore ||
-            displayName != lastDisplayName;
-
-        if (!changed)
-            return;
-
-        RefreshProfile(true);
-    }
-
-    // ============================================================
-    // REFRESH AFTER INITIALIZATION
-    // ============================================================
-
     private IEnumerator RefreshProfileAfterInitialization()
     {
         const int maxRetry = 20;
@@ -350,6 +347,7 @@ public class CharacterProfileUI : MonoBehaviour
             FindReferences();
             FindDataSystems();
             BindFirestoreEvents();
+            ConfigureExpImages();
 
             RefreshMiniProfileImmediate();
             RefreshProfile(true);
@@ -378,6 +376,10 @@ public class CharacterProfileUI : MonoBehaviour
     {
         Transform searchRoot = transform;
 
+        // --------------------------------------------------------
+        // CHARACTER PANEL
+        // --------------------------------------------------------
+
         if (characterPanel == null)
         {
             Transform panelTransform =
@@ -387,9 +389,15 @@ public class CharacterProfileUI : MonoBehaviour
                 );
 
             if (panelTransform != null)
+            {
                 characterPanel =
                     panelTransform.gameObject;
+            }
         }
+
+        // --------------------------------------------------------
+        // CLOSE BUTTON
+        // --------------------------------------------------------
 
         if (closeButton == null)
         {
@@ -400,9 +408,15 @@ public class CharacterProfileUI : MonoBehaviour
                 );
 
             if (buttonTransform != null)
+            {
                 closeButton =
                     buttonTransform.GetComponent<Button>();
+            }
         }
+
+        // --------------------------------------------------------
+        // CHARACTER TEXT
+        // --------------------------------------------------------
 
         playerNameText =
             FindTMP(
@@ -439,20 +453,15 @@ public class CharacterProfileUI : MonoBehaviour
                 searchRoot
             );
 
-        if (expFill == null)
-        {
-            Transform fillTransform =
-                FindChildRecursive(
-                    searchRoot,
-                    ExpFillName
-                );
+        // ========================================================
+        // MAIN EXP FILL
+        // ========================================================
 
-            if (fillTransform != null)
-            {
-                expFill =
-                    fillTransform.GetComponent<Image>();
-            }
-        }
+        ResolveMainExpFill();
+
+        // --------------------------------------------------------
+        // CURRENCY
+        // --------------------------------------------------------
 
         coinValueText =
             FindTMP(
@@ -468,6 +477,10 @@ public class CharacterProfileUI : MonoBehaviour
                 searchRoot
             );
 
+        // --------------------------------------------------------
+        // STATS
+        // --------------------------------------------------------
+
         runsValueText =
             FindTMP(
                 runsValueText,
@@ -482,7 +495,14 @@ public class CharacterProfileUI : MonoBehaviour
                 searchRoot
             );
 
-        if (closeButton == null && characterPanel != null)
+        // --------------------------------------------------------
+        // CLOSE BUTTON FALLBACK
+        // --------------------------------------------------------
+
+        if (
+            closeButton == null &&
+            characterPanel != null
+        )
         {
             Transform buttonTransform =
                 FindChildRecursive(
@@ -497,49 +517,93 @@ public class CharacterProfileUI : MonoBehaviour
             }
         }
 
+        // --------------------------------------------------------
+        // MINI PROFILE
+        // --------------------------------------------------------
+
         FindMiniProfileReferences();
+
+        ConfigureExpImages();
     }
 
     // ============================================================
-    // MINI PROFILE
+    // RESOLVE MAIN EXP FILL
+    // ============================================================
+
+    private void ResolveMainExpFill()
+    {
+        if (characterPanel == null)
+            return;
+
+        Transform fillTransform =
+            FindChildRecursive(
+                characterPanel.transform,
+                ExpFillName
+            );
+
+        if (fillTransform == null)
+        {
+            Debug.LogWarning(
+                "[CharacterProfileUI] " +
+                "Không tìm thấy object '" +
+                ExpFillName +
+                "' bên trong CharacterPanel."
+            );
+
+            return;
+        }
+
+        Image foundImage =
+            fillTransform.GetComponent<Image>();
+
+        if (foundImage == null)
+        {
+            Debug.LogWarning(
+                "[CharacterProfileUI] " +
+                "Object '" +
+                ExpFillName +
+                "' không có Image component."
+            );
+
+            return;
+        }
+
+        // --------------------------------------------------------
+        // QUAN TRỌNG:
+        // Luôn ưu tiên object Fill thực sự nằm trong CharacterPanel.
+        // Điều này tránh serialized reference cũ trỏ nhầm Image.
+        // --------------------------------------------------------
+
+        if (expFill != foundImage)
+        {
+            expFill = foundImage;
+
+            Debug.Log(
+                "[CharacterProfileUI] " +
+                "Main EXP Fill đã bind: " +
+                GetHierarchyPath(expFill.transform)
+            );
+        }
+    }
+
+    // ============================================================
+    // MINI PROFILE REFERENCES
     // ============================================================
 
     private void FindMiniProfileReferences()
     {
-        if (MiniReferencesReady())
-            return;
-
-        Transform miniRoot = null;
-
-        miniRoot =
+        Transform miniRoot =
             FindChildRecursive(
                 transform,
                 MiniPanelName
             );
 
         if (miniRoot == null)
-        {
-            Transform[] allTransforms =
-                FindObjectsByType<Transform>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None
-                );
-
-            for (int i = 0; i < allTransforms.Length; i++)
-            {
-                Transform t = allTransforms[i];
-
-                if (t != null &&
-                    t.name == MiniPanelName)
-                {
-                    miniRoot = t;
-                    break;
-                }
-            }
-        }
-
-        if (miniRoot == null)
             return;
+
+        // --------------------------------------------------------
+        // AVATAR
+        // --------------------------------------------------------
 
         if (avatarButton == null)
         {
@@ -555,6 +619,10 @@ public class CharacterProfileUI : MonoBehaviour
                     avatarTransform.GetComponent<Button>();
             }
         }
+
+        // --------------------------------------------------------
+        // MINI TEXT
+        // --------------------------------------------------------
 
         miniPlayerNameText =
             FindTMP(
@@ -577,20 +645,39 @@ public class CharacterProfileUI : MonoBehaviour
                 miniRoot
             );
 
-        if (miniExpFill == null)
-        {
-            Transform fillTransform =
-                FindChildRecursive(
-                    miniRoot,
-                    MiniExpFillName
-                );
+        // ========================================================
+        // MINI EXP FILL
+        // ========================================================
 
-            if (fillTransform != null)
+        Transform fillTransform =
+            FindChildRecursive(
+                miniRoot,
+                MiniExpFillName
+            );
+
+        if (fillTransform != null)
+        {
+            Image foundImage =
+                fillTransform.GetComponent<Image>();
+
+            if (foundImage != null &&
+                miniExpFill != foundImage)
             {
-                miniExpFill =
-                    fillTransform.GetComponent<Image>();
+                miniExpFill = foundImage;
+
+                Debug.Log(
+                    "[CharacterProfileUI] " +
+                    "Mini EXP Fill đã bind: " +
+                    GetHierarchyPath(
+                        miniExpFill.transform
+                    )
+                );
             }
         }
+
+        // --------------------------------------------------------
+        // COIN
+        // --------------------------------------------------------
 
         miniCoinText =
             FindTMP(
@@ -599,15 +686,21 @@ public class CharacterProfileUI : MonoBehaviour
                 miniRoot
             );
 
+        // --------------------------------------------------------
+        // BUTTON
+        // --------------------------------------------------------
+
         if (avatarButton != null)
         {
             avatarButton.onClick.RemoveListener(Open);
             avatarButton.onClick.AddListener(Open);
         }
+
+        ConfigureExpImage(miniExpFill);
     }
 
     // ============================================================
-    // MINI REFERENCES READY
+    // MINI READY
     // ============================================================
 
     private bool MiniReferencesReady()
@@ -621,107 +714,34 @@ public class CharacterProfileUI : MonoBehaviour
     }
 
     // ============================================================
-    // MINI PROFILE IMMEDIATE REFRESH
+    // CONFIGURE EXP IMAGE
     // ============================================================
 
-    private void RefreshMiniProfileImmediate()
+    private void ConfigureExpImages()
     {
-        FindDataSystems();
+        ConfigureExpImage(expFill);
+        ConfigureExpImage(miniExpFill);
+    }
 
-        if (!MiniReferencesReady())
-        {
-            FindMiniProfileReferences();
-        }
-
-        if (!MiniReferencesReady())
+    private void ConfigureExpImage(Image image)
+    {
+        if (image == null)
             return;
 
-        int level;
-        int currentExp;
-        int requiredExp;
-        int totalCoins;
-        int bestScore;
-        string displayName;
+        image.type =
+            Image.Type.Filled;
 
-        GetProfileData(
-            out level,
-            out currentExp,
-            out requiredExp,
-            out totalCoins,
-            out bestScore,
-            out displayName
-        );
+        image.fillMethod =
+            Image.FillMethod.Horizontal;
 
-        float progress = 0f;
+        image.fillOrigin =
+            (int)Image.OriginHorizontal.Left;
 
-        if (requiredExp > 0)
-        {
-            progress =
-                (float)currentExp /
-                requiredExp;
-        }
-
-        progress =
-            Mathf.Clamp01(progress);
-
-        if (miniPlayerNameText != null)
-        {
-            miniPlayerNameText.text =
-                displayName;
-        }
-
-        if (miniLevelText != null)
-        {
-            miniLevelText.text =
-                $"LV.{level}";
-        }
-
-        if (miniExpText != null)
-        {
-            miniExpText.text =
-                $"{currentExp} / {requiredExp} EXP";
-        }
-
-        if (miniExpFill != null)
-        {
-            miniExpFill.fillAmount =
-                progress;
-        }
-
-        if (miniCoinText != null)
-        {
-            miniCoinText.text =
-                totalCoins.ToString("N0");
-        }
+        image.fillClockwise = true;
     }
 
     // ============================================================
-    // FIND TMP
-    // ============================================================
-
-    private TMP_Text FindTMP(
-        TMP_Text current,
-        string targetName,
-        Transform searchRoot
-    )
-    {
-        if (current != null)
-            return current;
-
-        Transform target =
-            FindChildRecursive(
-                searchRoot,
-                targetName
-            );
-
-        if (target == null)
-            return null;
-
-        return target.GetComponent<TMP_Text>();
-    }
-
-    // ============================================================
-    // FIND DATA SYSTEMS
+    // DATA SYSTEMS
     // ============================================================
 
     private void FindDataSystems()
@@ -751,10 +771,13 @@ public class CharacterProfileUI : MonoBehaviour
 
     private bool HasFirestorePlayerData()
     {
+        FirestorePlayerDataManager manager =
+            FirestorePlayerDataManager.Instance;
+
         return
-            FirestorePlayerDataManager.Instance != null &&
-            FirestorePlayerDataManager.Instance.HasPlayerData &&
-            FirestorePlayerDataManager.Instance.CurrentPlayerData != null;
+            manager != null &&
+            manager.HasPlayerData &&
+            manager.CurrentPlayerData != null;
     }
 
     private PlayerData GetFirestorePlayerData()
@@ -763,12 +786,13 @@ public class CharacterProfileUI : MonoBehaviour
             return null;
 
         return
-            FirestorePlayerDataManager.Instance
+            FirestorePlayerDataManager
+                .Instance
                 .CurrentPlayerData;
     }
 
     // ============================================================
-    // GET PROFILE DATA
+    // PROFILE DATA
     // ============================================================
 
     private void GetProfileData(
@@ -777,38 +801,30 @@ public class CharacterProfileUI : MonoBehaviour
         out int requiredExp,
         out int totalCoins,
         out int bestScore,
+        out int totalRuns,
         out string displayName
     )
     {
         level = 1;
         currentExp = 0;
         requiredExp = 100;
+
         totalCoins = 0;
         bestScore = 0;
-        displayName = "NINJA LEAD";
+        totalRuns = 0;
+
+        displayName =
+            "NINJA LEAD";
 
         PlayerData cloudData =
             GetFirestorePlayerData();
 
+        // ========================================================
+        // CLOUD DATA
+        // ========================================================
+
         if (cloudData != null)
         {
-            level =
-                Mathf.Max(
-                    1,
-                    cloudData.level
-                );
-
-            currentExp =
-                Mathf.Max(
-                    0,
-                    cloudData.exp
-                );
-
-            requiredExp =
-                GetRequiredExpForLevel(
-                    level
-                );
-
             totalCoins =
                 Mathf.Max(
                     0,
@@ -821,17 +837,37 @@ public class CharacterProfileUI : MonoBehaviour
                     cloudData.bestScore
                 );
 
+            totalRuns =
+                Mathf.Max(
+                    0,
+                    cloudData.totalRuns
+                );
+
             if (!string.IsNullOrWhiteSpace(
                     cloudData.displayName))
             {
                 displayName =
                     cloudData.displayName;
             }
+        }
+        else
+        {
+            totalCoins =
+                GetLocalTotalCoins();
 
-            return;
+            bestScore =
+                GetLocalBestScore();
         }
 
-        if (playerProgression != null)
+        // ========================================================
+        // PLAYER PROGRESSION
+        // SOURCE OF TRUTH
+        // ========================================================
+
+        if (
+            playerProgression != null &&
+            playerProgression.IsInitialized
+        )
         {
             level =
                 Mathf.Max(
@@ -850,116 +886,264 @@ public class CharacterProfileUI : MonoBehaviour
                     1,
                     playerProgression.ExpRequiredForNextLevel
                 );
+
+            if (currentExp > requiredExp)
+            {
+                currentExp =
+                    requiredExp;
+            }
+
+            return;
         }
 
-        totalCoins =
-            GetLocalTotalCoins();
+        // ========================================================
+        // FALLBACK FIRESTORE
+        // ========================================================
 
-        bestScore =
-            GetLocalBestScore();
+        if (cloudData != null)
+        {
+            level =
+                Mathf.Max(
+                    1,
+                    cloudData.level
+                );
+
+            int totalExp =
+                Mathf.Max(
+                    0,
+                    cloudData.exp
+                );
+
+            CalculateCurrentLevelExpFallback(
+                level,
+                totalExp,
+                out currentExp,
+                out requiredExp
+            );
+        }
     }
 
     // ============================================================
-    // EXP REQUIRED
+    // FALLBACK EXP CALCULATION
     // ============================================================
 
-    private int GetRequiredExpForLevel(int level)
+    private void CalculateCurrentLevelExpFallback(
+        int level,
+        int totalExp,
+        out int currentExp,
+        out int requiredExp
+    )
     {
+        currentExp = 0;
+
+        requiredExp =
+            CalculateRequiredExpForLevel(
+                level
+            );
+
+        long expBeforeCurrentLevel = 0;
+
+        for (int i = 1;
+             i < level;
+             i++)
+        {
+            int requiredForLevel =
+                CalculateRequiredExpForLevel(i);
+
+            if (
+                expBeforeCurrentLevel >
+                long.MaxValue -
+                requiredForLevel
+            )
+            {
+                expBeforeCurrentLevel =
+                    long.MaxValue;
+
+                break;
+            }
+
+            expBeforeCurrentLevel +=
+                requiredForLevel;
+        }
+
+        long current =
+            (long)totalExp -
+            expBeforeCurrentLevel;
+
+        if (current <= 0)
+        {
+            currentExp = 0;
+            return;
+        }
+
+        if (current >= requiredExp)
+        {
+            currentExp =
+                requiredExp;
+
+            return;
+        }
+
+        currentExp =
+            (int)current;
+    }
+
+    // ============================================================
+    // EXP FORMULA
+    // ============================================================
+
+    private int CalculateRequiredExpForLevel(
+        int level
+    )
+    {
+        const int baseExp = 100;
+        const float growthMultiplier = 1.25f;
+
         if (level <= 1)
-            return 100;
+            return baseExp;
 
-        return 100;
+        float required =
+            baseExp *
+            Mathf.Pow(
+                growthMultiplier,
+                level - 1
+            );
+
+        if (
+            float.IsNaN(required) ||
+            float.IsInfinity(required)
+        )
+        {
+            return int.MaxValue;
+        }
+
+        if (required >= int.MaxValue)
+            return int.MaxValue;
+
+        return Mathf.Max(
+            1,
+            Mathf.RoundToInt(required)
+        );
     }
 
     // ============================================================
-    // BUTTONS
+    // EXP PROGRESS
     // ============================================================
 
-    private void SetupButtons()
+    private float CalculateExpProgress(
+        int currentExp,
+        int requiredExp
+    )
     {
-        if (closeButton != null)
-        {
-            closeButton.onClick.RemoveListener(Close);
-            closeButton.onClick.AddListener(Close);
-        }
+        if (requiredExp <= 0)
+            return 0f;
 
-        if (avatarButton != null)
-        {
-            avatarButton.onClick.RemoveListener(Open);
-            avatarButton.onClick.AddListener(Open);
-        }
+        if (currentExp <= 0)
+            return 0f;
+
+        if (currentExp >= requiredExp)
+            return 1f;
+
+        float progress =
+            (float)currentExp /
+            (float)requiredExp;
+
+        return Mathf.Clamp01(progress);
     }
 
     // ============================================================
-    // OPEN
+    // MINI REFRESH
     // ============================================================
 
-    public void Open()
+    private void RefreshMiniProfileImmediate()
     {
-        FindReferences();
         FindDataSystems();
-        BindFirestoreEvents();
+
+        if (!MiniReferencesReady())
+            FindMiniProfileReferences();
+
+        if (!MiniReferencesReady())
+            return;
+
+        int level;
+        int currentExp;
+        int requiredExp;
+        int totalCoins;
+        int bestScore;
+        int totalRuns;
+        string displayName;
+
+        GetProfileData(
+            out level,
+            out currentExp,
+            out requiredExp,
+            out totalCoins,
+            out bestScore,
+            out totalRuns,
+            out displayName
+        );
+
+        float progress =
+            CalculateExpProgress(
+                currentExp,
+                requiredExp
+            );
+
+        miniPlayerNameText.text =
+            displayName;
+
+        miniLevelText.text =
+            $"LV.{level}";
+
+        miniExpText.text =
+            $"{currentExp:N0} / {requiredExp:N0} EXP";
+
+        ConfigureExpImage(miniExpFill);
+
+        miniExpFill.fillAmount =
+            progress;
+
+        miniCoinText.text =
+            totalCoins.ToString("N0");
+    }
+
+    // ============================================================
+    // DATA CHANGE CHECK
+    // ============================================================
+
+    private void RefreshProfileIfDataChanged()
+    {
+        int level;
+        int currentExp;
+        int requiredExp;
+        int totalCoins;
+        int bestScore;
+        int totalRuns;
+        string displayName;
+
+        GetProfileData(
+            out level,
+            out currentExp,
+            out requiredExp,
+            out totalCoins,
+            out bestScore,
+            out totalRuns,
+            out displayName
+        );
+
+        bool changed =
+            level != lastLevel ||
+            currentExp != lastCurrentExp ||
+            requiredExp != lastRequiredExp ||
+            totalCoins != lastTotalCoins ||
+            bestScore != lastBestScore ||
+            totalRuns != lastTotalRuns ||
+            displayName != lastDisplayName;
+
+        if (!changed)
+            return;
 
         RefreshProfile(true);
-
-        if (characterPanel == null)
-        {
-            Debug.LogError(
-                "[CharacterProfileUI] " +
-                "Không tìm thấy CharacterPanel."
-            );
-
-            return;
-        }
-
-        characterPanel.SetActive(true);
-    }
-
-    // ============================================================
-    // CLOSE
-    // ============================================================
-
-    public void Close()
-    {
-        if (characterPanel == null)
-            FindReferences();
-
-        if (characterPanel == null)
-        {
-            Debug.LogError(
-                "[CharacterProfileUI] " +
-                "Không tìm thấy CharacterPanel."
-            );
-
-            return;
-        }
-
-        characterPanel.SetActive(false);
-    }
-
-    // ============================================================
-    // TOGGLE
-    // ============================================================
-
-    public void Toggle()
-    {
-        if (characterPanel == null)
-            FindReferences();
-
-        if (characterPanel == null)
-        {
-            Debug.LogError(
-                "[CharacterProfileUI] " +
-                "Không tìm thấy CharacterPanel."
-            );
-
-            return;
-        }
-
-        if (characterPanel.activeSelf)
-            Close();
-        else
-            Open();
     }
 
     // ============================================================
@@ -975,12 +1159,14 @@ public class CharacterProfileUI : MonoBehaviour
     {
         FindReferences();
         FindDataSystems();
+        ConfigureExpImages();
 
         int level;
         int currentExp;
         int requiredExp;
         int totalCoins;
         int bestScore;
+        int totalRuns;
         string displayName;
 
         GetProfileData(
@@ -989,8 +1175,15 @@ public class CharacterProfileUI : MonoBehaviour
             out requiredExp,
             out totalCoins,
             out bestScore,
+            out totalRuns,
             out displayName
         );
+
+        float progress =
+            CalculateExpProgress(
+                currentExp,
+                requiredExp
+            );
 
         // ========================================================
         // CHARACTER
@@ -1041,41 +1234,41 @@ public class CharacterProfileUI : MonoBehaviour
         }
 
         // ========================================================
-        // EXP
+        // EXP TEXT
         // ========================================================
-
-        float progress = 0f;
-
-        if (requiredExp > 0)
-        {
-            progress =
-                (float)currentExp /
-                requiredExp;
-        }
-
-        progress =
-            Mathf.Clamp01(progress);
 
         if (expValueText != null)
         {
             expValueText.text =
-                $"{currentExp} / {requiredExp} EXP";
-        }
-
-        if (expFill != null)
-        {
-            expFill.fillAmount =
-                progress;
+                $"{currentExp:N0} / {requiredExp:N0} EXP";
         }
 
         if (miniExpText != null)
         {
             miniExpText.text =
-                $"{currentExp} / {requiredExp} EXP";
+                $"{currentExp:N0} / {requiredExp:N0} EXP";
         }
+
+        // ========================================================
+        // MAIN EXP BAR
+        // ========================================================
+
+        if (expFill != null)
+        {
+            ConfigureExpImage(expFill);
+
+            expFill.fillAmount =
+                progress;
+        }
+
+        // ========================================================
+        // MINI EXP BAR
+        // ========================================================
 
         if (miniExpFill != null)
         {
+            ConfigureExpImage(miniExpFill);
+
             miniExpFill.fillAmount =
                 progress;
         }
@@ -1122,7 +1315,8 @@ public class CharacterProfileUI : MonoBehaviour
 
         if (runsValueText != null)
         {
-            runsValueText.text = "—";
+            runsValueText.text =
+                totalRuns.ToString("N0");
         }
 
         // ========================================================
@@ -1144,6 +1338,9 @@ public class CharacterProfileUI : MonoBehaviour
         lastBestScore =
             bestScore;
 
+        lastTotalRuns =
+            totalRuns;
+
         lastDisplayName =
             displayName;
     }
@@ -1155,9 +1352,7 @@ public class CharacterProfileUI : MonoBehaviour
     private int GetLocalTotalCoins()
     {
         if (gameManager != null)
-        {
             return gameManager.GetTotalCoins();
-        }
 
         return PlayerPrefs.GetInt(
             "TotalCoins",
@@ -1166,15 +1361,13 @@ public class CharacterProfileUI : MonoBehaviour
     }
 
     // ============================================================
-    // LOCAL BEST SCORE
+    // LOCAL BEST
     // ============================================================
 
     private int GetLocalBestScore()
     {
         if (gameManager != null)
-        {
             return gameManager.GetHighScoreInt();
-        }
 
         return Mathf.FloorToInt(
             PlayerPrefs.GetFloat(
@@ -1215,27 +1408,115 @@ public class CharacterProfileUI : MonoBehaviour
     private string GetCharacterDescription(int level)
     {
         if (level >= 30)
+        {
             return
                 "Tên tuổi của bạn đã trở thành huyền thoại trên mọi cung đường.";
+        }
 
         if (level >= 20)
+        {
             return
                 "Không còn gì có thể cản nổi Ninja Lead trên xa lộ.";
+        }
 
         if (level >= 15)
+        {
             return
                 "Một quái xế thực thụ. Giao thông chỉ còn là chuyện nhỏ.";
+        }
 
         if (level >= 10)
+        {
             return
                 "Kỹ năng đã đủ để biến những cung đường hỗn loạn thành sân chơi.";
+        }
 
         if (level >= 5)
+        {
             return
                 "Tay lái ngày càng cứng. Nhưng đường phố vẫn còn rất nhiều thử thách.";
+        }
 
         return
             "Một Ninja Lead mới vào nghề. Hãy sống sót và tăng tốc!";
+    }
+
+    // ============================================================
+    // BUTTONS
+    // ============================================================
+
+    private void SetupButtons()
+    {
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(Close);
+            closeButton.onClick.AddListener(Close);
+        }
+
+        if (avatarButton != null)
+        {
+            avatarButton.onClick.RemoveListener(Open);
+            avatarButton.onClick.AddListener(Open);
+        }
+    }
+
+    // ============================================================
+    // OPEN
+    // ============================================================
+
+    public void Open()
+    {
+        FindReferences();
+        FindDataSystems();
+        BindFirestoreEvents();
+        ConfigureExpImages();
+
+        RefreshProfile(true);
+
+        if (characterPanel == null)
+        {
+            Debug.LogError(
+                "[CharacterProfileUI] " +
+                "Không tìm thấy CharacterPanel."
+            );
+
+            return;
+        }
+
+        characterPanel.SetActive(true);
+    }
+
+    // ============================================================
+    // CLOSE
+    // ============================================================
+
+    public void Close()
+    {
+        if (characterPanel == null)
+            FindReferences();
+
+        if (characterPanel == null)
+            return;
+
+        characterPanel.SetActive(false);
+    }
+
+    // ============================================================
+    // TOGGLE
+    // ============================================================
+
+    public void Toggle()
+    {
+        if (characterPanel == null)
+            FindReferences();
+
+        if (characterPanel == null)
+            return;
+
+        if (characterPanel.activeSelf)
+            Close();
+        else
+            Open();
     }
 
     // ============================================================
@@ -1244,29 +1525,28 @@ public class CharacterProfileUI : MonoBehaviour
 
     public bool IsOpen()
     {
-        return characterPanel != null &&
-               characterPanel.activeSelf;
+        return
+            characterPanel != null &&
+            characterPanel.activeSelf;
     }
 
     // ============================================================
-    // DEBUG
+    // DEBUG EXP BAR
     // ============================================================
 
-    [ContextMenu("DEBUG References")]
-    private void DebugReferences()
+    [ContextMenu("DEBUG EXP BAR")]
+    private void DebugExpBar()
     {
         FindReferences();
         FindDataSystems();
-        BindFirestoreEvents();
-
-        PlayerData cloudData =
-            GetFirestorePlayerData();
+        ConfigureExpImages();
 
         int level;
         int currentExp;
         int requiredExp;
         int totalCoins;
         int bestScore;
+        int totalRuns;
         string displayName;
 
         GetProfileData(
@@ -1275,63 +1555,241 @@ public class CharacterProfileUI : MonoBehaviour
             out requiredExp,
             out totalCoins,
             out bestScore,
+            out totalRuns,
             out displayName
         );
 
+        float progress =
+            CalculateExpProgress(
+                currentExp,
+                requiredExp
+            );
+
         Debug.Log(
-            "[CharacterProfileUI]\n" +
+            "\n" +
+            "========== CHARACTER EXP DEBUG ==========\n" +
 
-            $"CharacterProfileUI Object Active: " +
-            $"{gameObject.activeInHierarchy}\n" +
+            $"Level             : {level}\n" +
+            $"Current EXP       : {currentExp}\n" +
+            $"Required EXP      : {requiredExp}\n" +
+            $"Progress          : {progress:F4}\n" +
+            $"Percentage        : {(progress * 100f):F2}%\n" +
 
-            $"PlayerProgression: " +
-            $"{(playerProgression != null ? "FOUND" : "NULL")}\n" +
+            "-----------------------------------------\n" +
 
-            $"GameManager: " +
-            $"{(gameManager != null ? "FOUND" : "NULL")}\n" +
+            $"Main expFill      : " +
+            $"{(expFill != null ? expFill.name : "NULL")}\n" +
 
-            $"Firestore Manager: " +
-            $"{(FirestorePlayerDataManager.Instance != null ? "FOUND" : "NULL")}\n" +
+            $"Main hierarchy    : " +
+            $"{(expFill != null ? GetHierarchyPath(expFill.transform) : "NULL")}\n" +
 
-            $"Firestore Events Bound: " +
-            $"{(firestoreManager != null ? "YES" : "NO")}\n" +
+            $"Main Image Type   : " +
+            $"{(expFill != null ? expFill.type.ToString() : "NULL")}\n" +
 
-            $"Firestore PlayerData: " +
-            $"{(cloudData != null ? "FOUND" : "NULL")}\n" +
+            $"Main Fill Method  : " +
+            $"{(expFill != null ? expFill.fillMethod.ToString() : "NULL")}\n" +
 
-            $"Display Name: " +
-            $"{displayName}\n" +
+            $"Main Fill Origin  : " +
+            $"{(expFill != null ? expFill.fillOrigin.ToString() : "NULL")}\n" +
 
-            $"MiniPlayerName: " +
-            $"{(miniPlayerNameText != null ? "FOUND" : "NULL")}\n" +
+            $"Main fillAmount   : " +
+            $"{(expFill != null ? expFill.fillAmount.ToString("F4") : "NULL")}\n" +
 
-            $"MiniLevel: " +
-            $"{(miniLevelText != null ? "FOUND" : "NULL")}\n" +
+            "-----------------------------------------\n" +
 
-            $"MiniExp: " +
-            $"{(miniExpText != null ? "FOUND" : "NULL")}\n" +
+            $"Mini expFill      : " +
+            $"{(miniExpFill != null ? miniExpFill.name : "NULL")}\n" +
 
-            $"MiniExpFill: " +
-            $"{(miniExpFill != null ? "FOUND" : "NULL")}\n" +
+            $"Mini hierarchy    : " +
+            $"{(miniExpFill != null ? GetHierarchyPath(miniExpFill.transform) : "NULL")}\n" +
 
-            $"MiniCoin: " +
-            $"{(miniCoinText != null ? "FOUND" : "NULL")}\n" +
+            $"Mini Image Type   : " +
+            $"{(miniExpFill != null ? miniExpFill.type.ToString() : "NULL")}\n" +
 
-            $"Level: " +
-            $"{level}\n" +
+            $"Mini Fill Method  : " +
+            $"{(miniExpFill != null ? miniExpFill.fillMethod.ToString() : "NULL")}\n" +
 
-            $"Current EXP: " +
-            $"{currentExp}\n" +
+            $"Mini Fill Origin  : " +
+            $"{(miniExpFill != null ? miniExpFill.fillOrigin.ToString() : "NULL")}\n" +
 
-            $"Required EXP: " +
-            $"{requiredExp}\n" +
+            $"Mini fillAmount   : " +
+            $"{(miniExpFill != null ? miniExpFill.fillAmount.ToString("F4") : "NULL")}\n" +
 
-            $"Total Coins: " +
-            $"{totalCoins}\n" +
+            "-----------------------------------------\n" +
 
-            $"Best Score: " +
-            $"{bestScore}"
+            $"Total Runs        : {totalRuns}\n" +
+
+            "=========================================\n"
         );
+    }
+
+    // ============================================================
+    // DEBUG FORCE 0%
+    // ============================================================
+
+    [ContextMenu("DEBUG Set EXP Bar 0%")]
+    private void DebugSetExpBarZero()
+    {
+        ForceExpBar(0f);
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            "Đã set EXP bar = 0%."
+        );
+    }
+
+    // ============================================================
+    // DEBUG FORCE 25%
+    // ============================================================
+
+    [ContextMenu("DEBUG Set EXP Bar 25%")]
+    private void DebugSetExpBar25()
+    {
+        ForceExpBar(0.25f);
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            "Đã set EXP bar = 25%."
+        );
+    }
+
+    // ============================================================
+    // DEBUG FORCE 50%
+    // ============================================================
+
+    [ContextMenu("DEBUG Set EXP Bar 50%")]
+    private void DebugSetExpBar50()
+    {
+        ForceExpBar(0.50f);
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            "Đã set EXP bar = 50%."
+        );
+    }
+
+    // ============================================================
+    // DEBUG FORCE 75%
+    // ============================================================
+
+    [ContextMenu("DEBUG Set EXP Bar 75%")]
+    private void DebugSetExpBar75()
+    {
+        ForceExpBar(0.75f);
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            "Đã set EXP bar = 75%."
+        );
+    }
+
+    // ============================================================
+    // DEBUG FORCE 100%
+    // ============================================================
+
+    [ContextMenu("DEBUG Set EXP Bar 100%")]
+    private void DebugSetExpBar100()
+    {
+        ForceExpBar(1f);
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            "Đã set EXP bar = 100%."
+        );
+    }
+
+    // ============================================================
+    // FORCE EXP BAR
+    // ============================================================
+
+    private void ForceExpBar(float value)
+    {
+        value =
+            Mathf.Clamp01(value);
+
+        FindReferences();
+        ConfigureExpImages();
+
+        if (expFill != null)
+        {
+            expFill.fillAmount =
+                value;
+        }
+
+        if (miniExpFill != null)
+        {
+            miniExpFill.fillAmount =
+                value;
+        }
+
+        Debug.Log(
+            "[CharacterProfileUI] " +
+            $"Force EXP Fill = {value * 100f:F1}%"
+        );
+    }
+
+    // ============================================================
+    // HIERARCHY DEBUG
+    // ============================================================
+
+    private string GetHierarchyPath(
+        Transform target
+    )
+    {
+        if (target == null)
+            return "NULL";
+
+        string path =
+            target.name;
+
+        Transform current =
+            target.parent;
+
+        int safety = 0;
+
+        while (
+            current != null &&
+            safety < 100
+        )
+        {
+            path =
+                current.name +
+                "/" +
+                path;
+
+            current =
+                current.parent;
+
+            safety++;
+        }
+
+        return path;
+    }
+
+    // ============================================================
+    // FIND TMP
+    // ============================================================
+
+    private TMP_Text FindTMP(
+        TMP_Text current,
+        string targetName,
+        Transform searchRoot
+    )
+    {
+        if (current != null)
+            return current;
+
+        Transform target =
+            FindChildRecursive(
+                searchRoot,
+                targetName
+            );
+
+        if (target == null)
+            return null;
+
+        return
+            target.GetComponent<TMP_Text>();
     }
 
     // ============================================================
@@ -1349,7 +1807,11 @@ public class CharacterProfileUI : MonoBehaviour
         if (parent.name == targetName)
             return parent;
 
-        for (int i = 0; i < parent.childCount; i++)
+        for (
+            int i = 0;
+            i < parent.childCount;
+            i++
+        )
         {
             Transform child =
                 parent.GetChild(i);

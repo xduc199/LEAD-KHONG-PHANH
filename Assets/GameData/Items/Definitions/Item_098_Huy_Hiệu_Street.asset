@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 744c32564359b304fb5bcd39b0f14413, type: 3}
+  m_Name: "Item_098_Huy_Hi\u1EC7u_Street"
+  m_EditorClassIdentifier: 
+  itemId: 98
+  itemName: "Ph\u1EE5 Ki\u1EC7n 18"
+  description: "Ph\u1EE5 Ki\u1EC7n 18 - Accessory Rare"
+  category: 2
+  subCategory: "Ph\u1EE5 Ki\u1EC7n"
+  rarity: 2
+  icon: {fileID: 0}
+  prefab: {fileID: 0}
+  visualId: VISUAL_ITEM_098
+  purchasable: 1
+  price: 500
+  currency: 0
+  hasStats: 1
+  stats:
+    modifiers:
+    - statKey: MaxSpeed
+      value: 3
+      isPercent: 0
+      condition: 
+    - statKey: Handling
+      value: 12
+      isPercent: 1
+      condition: 
+    - statKey: ShieldDuration
+      value: 1.5
+      isPercent: 0
+      condition: 
+  sourceBuffText: 'MaxSpeed: 3, Handling: 12, ShieldDuration: 1.5'
+  passiveDescription: "Ph\u1EE5 Ki\u1EC7n 18 - Accessory Rare"

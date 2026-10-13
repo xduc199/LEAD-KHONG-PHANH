@@ -1,0 +1,21 @@
+{
+  "name": "LEADKhongPhanh.Update.Tests",
+  "rootNamespace": "LEADKhongPhanh.Update.Tests",
+  "references": [
+    "LEADKhongPhanh.Update"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

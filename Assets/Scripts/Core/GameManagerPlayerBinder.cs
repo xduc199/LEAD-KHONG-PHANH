@@ -1,81 +1,106 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
-public class GameManagerPlayerBinder : MonoBehaviour
+[DefaultExecutionOrder(-50)]
+public sealed class GameManagerPlayerBinder : MonoBehaviour
 {
-    [Header("Bind Settings")]
-    [SerializeField] private float retryInterval = 0.1f;
+    private const string GameplaySceneName = "GameplayScene";
 
-    private bool isBound;
-    private float retryTimer;
+    [Header("Player")]
+    [SerializeField]
+    private Transform playerTransform;
+
+    private bool bound;
+    private bool waitingForGameManager;
 
     private void Start()
     {
-        BeginNewRun();
-
-        BindPlayerToGameManager();
+        TryBind();
     }
 
     private void Update()
     {
-        if (isBound)
+        // Không có allocation.
+        // Chỉ polling khi chưa bind được.
+        if (bound)
             return;
 
-        retryTimer -= Time.unscaledDeltaTime;
-
-        if (retryTimer > 0f)
+        if (!waitingForGameManager)
             return;
 
-        retryTimer = retryInterval;
-
-        BindPlayerToGameManager();
+        TryBind();
     }
 
-    //==============================================================
-    // BEGIN NEW RUN
-    //==============================================================
-
-    private void BeginNewRun()
+    private void OnDestroy()
     {
-        if (GameManager.Instance == null)
-        {
-            Debug.LogWarning(
-                "[GameManagerPlayerBinder] " +
-                "GameManager.Instance chưa tồn tại. " +
-                "Không thể bắt đầu run mới."
-            );
+        UnbindPlayerFromGameManager();
+    }
 
+    private void TryBind()
+    {
+        if (bound)
+            return;
+
+        Scene activeScene = SceneManager.GetActiveScene();
+
+        if (!activeScene.IsValid())
+            return;
+
+        if (activeScene.name != GameplaySceneName)
+            return;
+
+        GameManager gameManager = GameManager.Instance;
+
+        if (gameManager == null)
+        {
+            waitingForGameManager = true;
             return;
         }
 
-        GameManager.Instance.BeginNewRun();
+        Transform targetPlayer = playerTransform;
 
-        Debug.Log(
-            "[GameManagerPlayerBinder] " +
-            "Đã bắt đầu Gameplay Run mới. " +
-            "Run data đã được reset."
-        );
-    }
+        if (targetPlayer == null)
+            targetPlayer = transform;
 
-    //==============================================================
-    // BIND PLAYER
-    //==============================================================
-
-    private void BindPlayerToGameManager()
-    {
-        if (GameManager.Instance == null)
+        if (targetPlayer == null)
         {
+            Debug.LogError(
+                "[GameManagerPlayerBinder] Không tìm thấy Player Transform.",
+                this);
+
+            waitingForGameManager = false;
             return;
         }
 
-        GameManager.Instance.SetPlayerTransform(transform);
+        // Bắt đầu một runtime run mới.
+        if (!gameManager.IsRunActive)
+        {
+            gameManager.BeginNewRun();
+        }
 
-        isBound = true;
+        gameManager.SetPlayerTransform(targetPlayer);
+
+        bound = true;
+        waitingForGameManager = false;
 
         Debug.Log(
-            "[GameManagerPlayerBinder] " +
-            "Đã gán Player '" +
-            gameObject.name +
-            "' vào GameManager."
-        );
+            "[GameManagerPlayerBinder] Player bound successfully.",
+            this);
+    }
+
+    private void UnbindPlayerFromGameManager()
+    {
+        if (!bound)
+            return;
+
+        GameManager gameManager = GameManager.Instance;
+
+        if (gameManager != null)
+        {
+            gameManager.ClearPlayerReference();
+        }
+
+        bound = false;
+        waitingForGameManager = false;
     }
 }

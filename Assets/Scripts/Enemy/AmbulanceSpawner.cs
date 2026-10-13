@@ -605,9 +605,8 @@ public class AmbulanceSpawner : MonoBehaviour
         //=========================================================
 
         float y =
-            playerTransform.position.y +
-            warningLineHeight +
-            extraLineHeight;
+    warningLineHeight +
+    extraLineHeight;
 
 
         //=========================================================
@@ -662,12 +661,12 @@ public class AmbulanceSpawner : MonoBehaviour
         //=========================================================
 
         Vector3 spawnPosition =
-            new Vector3(
-                laneX,
-                playerTransform.position.y,
-                playerTransform.position.z -
-                spawnDistanceBehind
-            );
+    new Vector3(
+        laneX,
+        0f,
+        playerTransform.position.z -
+        spawnDistanceBehind
+    );
 
 
         //=========================================================

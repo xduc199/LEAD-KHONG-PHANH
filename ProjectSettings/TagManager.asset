@@ -13,16 +13,17 @@ TagManager:
   - Magnet
   - Shield
   - Gum
+  - ShieldPickup
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - GarageShowcase
   - Water
   - UI
   - 
   - 
-  - 
+  - GaragePreview
   - 
   - 
   - 

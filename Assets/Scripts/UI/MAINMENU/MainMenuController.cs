@@ -2,7 +2,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class MainMenuController : MonoBehaviour
+[DisallowMultipleComponent]
+public sealed class MainMenuController : MonoBehaviour
 {
     // ============================================================
     // SCENES
@@ -10,19 +11,40 @@ public class MainMenuController : MonoBehaviour
 
     [Header("Scenes")]
     [SerializeField] private string loadingSceneName = "Loading";
-
     [SerializeField] private string gameplaySceneName = "Gameplay";
-
     [SerializeField] private string loginSceneName = "Login";
 
+    // ============================================================
+    // MAIN MENU
+    // ============================================================
+
+    [Header("Main Menu")]
+    [SerializeField] private GameObject mainMenuScreen;
 
     // ============================================================
-    // MISSION UI
+    // MAIN MENU PANELS / OVERLAYS
     // ============================================================
 
-    [Header("Mission UI")]
+    [Header("Main Menu Panels / Overlays")]
+    [SerializeField] private GameObject shopPanel;
+    [SerializeField] private GameObject wardrobePanel;
+    [SerializeField] private GameObject garagePanel;
+    [SerializeField] private GameObject upgradePanel;
     [SerializeField] private GameObject missionPanel;
 
+    // ============================================================
+    // WARDROBE
+    // ============================================================
+
+    [Header("Wardrobe")]
+    [SerializeField] private InventoryUI inventoryUI;
+
+    // ============================================================
+    // GARAGE
+    // ============================================================
+
+    [Header("Garage")]
+    [SerializeField] private MainMenuGarageUI garageUI;
 
     // ============================================================
     // BUTTONS
@@ -31,25 +53,24 @@ public class MainMenuController : MonoBehaviour
     [Header("Buttons")]
     [SerializeField] private Button playButton;
 
-
     // ============================================================
-    // INTERNAL
+    // STATE
     // ============================================================
 
     private bool playButtonBound;
     private bool isStartingGame;
     private bool isLoggingOut;
-
+    private bool isExitingGame;
 
     // ============================================================
-    // AWAKE
+    // UNITY
     // ============================================================
 
     private void Awake()
     {
         Debug.Log(
-            "[MainMenuController] AWAKE | " +
-            $"Object={gameObject.name}",
+            "[MainMenuController] AWAKE | Object=" +
+            gameObject.name,
             this
         );
 
@@ -57,17 +78,18 @@ public class MainMenuController : MonoBehaviour
 
         isStartingGame = false;
         isLoggingOut = false;
+        isExitingGame = false;
 
-        if (missionPanel != null)
-            missionPanel.SetActive(false);
+        if (mainMenuScreen != null)
+            mainMenuScreen.SetActive(true);
+
+        CloseAllPanels();
+
+        ResolveInventoryUI();
+        ResolveGarageUI();
 
         BindPlayButton();
     }
-
-
-    // ============================================================
-    // ON ENABLE
-    // ============================================================
 
     private void OnEnable()
     {
@@ -75,12 +97,8 @@ public class MainMenuController : MonoBehaviour
 
         isStartingGame = false;
         isLoggingOut = false;
+        isExitingGame = false;
     }
-
-
-    // ============================================================
-    // START
-    // ============================================================
 
     private void Start()
     {
@@ -88,6 +106,15 @@ public class MainMenuController : MonoBehaviour
 
         isStartingGame = false;
         isLoggingOut = false;
+        isExitingGame = false;
+
+        if (mainMenuScreen != null)
+            mainMenuScreen.SetActive(true);
+
+        CloseAllPanels();
+
+        ResolveInventoryUI();
+        ResolveGarageUI();
 
         BindPlayButton();
 
@@ -96,14 +123,119 @@ public class MainMenuController : MonoBehaviour
             $"Object={gameObject.name} | " +
             $"PlayButton={(playButton != null ? playButton.gameObject.name : "NULL")} | " +
             $"Bound={playButtonBound} | " +
-            $"StartingGame={isStartingGame}",
+            $"StartingGame={isStartingGame} | " +
+            $"InventoryUI={(inventoryUI != null ? inventoryUI.gameObject.name : "NULL")} | " +
+            $"GarageUI={(garageUI != null ? garageUI.gameObject.name : "NULL")}",
             this
         );
     }
 
+    // ============================================================
+    // INVENTORY / WARDROBE RESOLVE
+    // ============================================================
+
+    private void ResolveInventoryUI()
+    {
+        if (inventoryUI != null)
+            return;
+
+        if (wardrobePanel != null)
+        {
+            inventoryUI =
+                wardrobePanel.GetComponentInChildren<InventoryUI>(true);
+
+            if (inventoryUI != null)
+            {
+                Debug.Log(
+                    "[MainMenuController] ĐÃ TÌM THẤY InventoryUI trong WardrobePanel -> " +
+                    inventoryUI.gameObject.name,
+                    inventoryUI
+                );
+
+                return;
+            }
+        }
+
+        InventoryUI[] inventoryUIs =
+            FindObjectsByType<InventoryUI>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+
+        if (inventoryUIs == null ||
+            inventoryUIs.Length == 0)
+        {
+            Debug.LogWarning(
+                "[MainMenuController] KHÔNG TÌM THẤY InventoryUI trong Scene.",
+                this
+            );
+
+            return;
+        }
+
+        inventoryUI = inventoryUIs[0];
+
+        Debug.Log(
+            "[MainMenuController] FALLBACK -> Tìm thấy InventoryUI: " +
+            inventoryUI.gameObject.name,
+            inventoryUI
+        );
+    }
 
     // ============================================================
-    // BIND PLAY BUTTON
+    // GARAGE RESOLVE
+    // ============================================================
+
+    private void ResolveGarageUI()
+    {
+        if (garageUI != null)
+            return;
+
+        if (garagePanel != null)
+        {
+            garageUI =
+                garagePanel.GetComponentInChildren<MainMenuGarageUI>(true);
+
+            if (garageUI != null)
+            {
+                Debug.Log(
+                    "[MainMenuController] ĐÃ TÌM THẤY MainMenuGarageUI trong GaragePanel -> " +
+                    garageUI.gameObject.name,
+                    garageUI
+                );
+
+                return;
+            }
+        }
+
+        MainMenuGarageUI[] garageUIs =
+            FindObjectsByType<MainMenuGarageUI>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+
+        if (garageUIs == null ||
+            garageUIs.Length == 0)
+        {
+            Debug.LogWarning(
+                "[MainMenuController] KHÔNG TÌM THẤY MainMenuGarageUI trong Scene.",
+                this
+            );
+
+            return;
+        }
+
+        garageUI = garageUIs[0];
+
+        Debug.Log(
+            "[MainMenuController] FALLBACK -> Tìm thấy MainMenuGarageUI: " +
+            garageUI.gameObject.name,
+            garageUI
+        );
+    }
+
+    // ============================================================
+    // PLAY BUTTON
     // ============================================================
 
     private void BindPlayButton()
@@ -124,28 +256,8 @@ public class MainMenuController : MonoBehaviour
             );
 
             playButtonBound = false;
-
             return;
         }
-
-        Debug.Log(
-            "[MainMenuController] Tìm thấy PlayButton: " +
-            playButton.gameObject.name,
-            playButton
-        );
-
-        /*
-         * CHỈ DÙNG MỘT ĐƯỜNG CLICK:
-         *
-         * Button.onClick -> Play()
-         *
-         * Không dùng Relay.
-         * Không dùng IPointerClickHandler.
-         * Không tự tìm MainMenuController khác.
-         *
-         * RemoveListener chỉ xóa runtime listener Play().
-         * Persistent OnClick trong Inspector vẫn tồn tại.
-         */
 
         playButton.onClick.RemoveListener(Play);
         playButton.onClick.AddListener(Play);
@@ -157,11 +269,6 @@ public class MainMenuController : MonoBehaviour
             playButton
         );
     }
-
-
-    // ============================================================
-    // FIND PLAY BUTTON
-    // ============================================================
 
     private Button FindPlayButton()
     {
@@ -185,19 +292,15 @@ public class MainMenuController : MonoBehaviour
             if (button == null)
                 continue;
 
-            if (
-                button.gameObject.name
-                    .ToLowerInvariant()
-                    .Contains("play")
-            )
-            {
+            string buttonName =
+                button.gameObject.name.ToLowerInvariant();
+
+            if (buttonName.Contains("play"))
                 return button;
-            }
         }
 
         return null;
     }
-
 
     // ============================================================
     // PLAY
@@ -213,8 +316,7 @@ public class MainMenuController : MonoBehaviour
         if (isStartingGame)
         {
             Debug.Log(
-                "[MainMenuController] Play() bị bỏ qua: " +
-                "Gameplay đang được khởi động.",
+                "[MainMenuController] Play() bị bỏ qua: Gameplay đang được khởi động.",
                 this
             );
 
@@ -224,8 +326,17 @@ public class MainMenuController : MonoBehaviour
         if (isLoggingOut)
         {
             Debug.Log(
-                "[MainMenuController] Play() bị bỏ qua: " +
-                "Đang đăng xuất.",
+                "[MainMenuController] Play() bị bỏ qua: Đang đăng xuất.",
+                this
+            );
+
+            return;
+        }
+
+        if (isExitingGame)
+        {
+            Debug.Log(
+                "[MainMenuController] Play() bị bỏ qua: Game đang thoát.",
                 this
             );
 
@@ -234,48 +345,29 @@ public class MainMenuController : MonoBehaviour
 
         isStartingGame = true;
 
-
-        // --------------------------------------------------------
-        // CHECK GAMEPLAY SCENE
-        // --------------------------------------------------------
-
-        if (string.IsNullOrWhiteSpace(
-                gameplaySceneName))
+        if (string.IsNullOrWhiteSpace(gameplaySceneName))
         {
             isStartingGame = false;
 
             Debug.LogError(
-                "[MainMenuController] " +
-                "Gameplay Scene Name đang trống.",
+                "[MainMenuController] Gameplay Scene Name đang trống.",
                 this
             );
 
             return;
         }
 
-
-        // --------------------------------------------------------
-        // CHECK LOADING SCENE
-        // --------------------------------------------------------
-
-        if (string.IsNullOrWhiteSpace(
-                loadingSceneName))
+        if (string.IsNullOrWhiteSpace(loadingSceneName))
         {
             isStartingGame = false;
 
             Debug.LogError(
-                "[MainMenuController] " +
-                "Loading Scene Name đang trống.",
+                "[MainMenuController] Loading Scene Name đang trống.",
                 this
             );
 
             return;
         }
-
-
-        // --------------------------------------------------------
-        // CHECK LOADING SCENE
-        // --------------------------------------------------------
 
         bool canLoad =
             Application.CanStreamedLevelBeLoaded(
@@ -290,24 +382,17 @@ public class MainMenuController : MonoBehaviour
             this
         );
 
-
         if (!canLoad)
         {
             isStartingGame = false;
 
             Debug.LogError(
-                $"Không thể load Scene '{loadingSceneName}'. " +
-                "Kiểm tra Build Profiles.",
+                $"Không thể load Scene '{loadingSceneName}'. Kiểm tra Build Profiles.",
                 this
             );
 
             return;
         }
-
-
-        // --------------------------------------------------------
-        // SAVE LOADING TARGET
-        // --------------------------------------------------------
 
         PlayerPrefs.SetString(
             "LoadingTargetScene",
@@ -316,18 +401,12 @@ public class MainMenuController : MonoBehaviour
 
         PlayerPrefs.Save();
 
-
         Debug.Log(
             "[MainMenuController] LoadingTargetScene = '" +
             gameplaySceneName +
             "'",
             this
         );
-
-
-        // --------------------------------------------------------
-        // LOAD LOADING SCENE
-        // --------------------------------------------------------
 
         Time.timeScale = 1f;
 
@@ -337,11 +416,133 @@ public class MainMenuController : MonoBehaviour
             this
         );
 
-        SceneManager.LoadScene(
-            loadingSceneName
+        SceneManager.LoadScene(loadingSceneName);
+    }
+
+    // ============================================================
+    // MAIN MENU NAVIGATION
+    // ============================================================
+
+    public void OpenMainMenu()
+    {
+        CloseAllPanels();
+
+        if (mainMenuScreen != null)
+            mainMenuScreen.SetActive(true);
+
+        Debug.Log(
+            "[MainMenuController] OPEN MAIN MENU / CLOSE ALL OVERLAYS",
+            this
         );
     }
 
+    // ============================================================
+    // SHOP
+    // ============================================================
+
+    public void OpenShop()
+    {
+        OpenPanel(shopPanel, "Shop");
+    }
+
+    public void CloseShop()
+    {
+        ClosePanel(shopPanel, "Shop");
+    }
+
+    // ============================================================
+    // WARDROBE
+    // ============================================================
+
+    public void OpenWardrobe()
+    {
+        ResolveInventoryUI();
+
+        if (!OpenPanel(wardrobePanel, "Wardrobe"))
+            return;
+
+        if (inventoryUI == null)
+        {
+            Debug.LogError(
+                "[MainMenuController] KHÔNG CÓ InventoryUI -> " +
+                "Không thể refresh Tủ đồ.",
+                this
+            );
+
+            return;
+        }
+
+        Debug.Log(
+            "[MainMenuController] WARDROBE -> GỌI InventoryUI.Open()",
+            inventoryUI
+        );
+
+        inventoryUI.Open();
+    }
+
+    public void CloseWardrobe()
+    {
+        ClosePanel(wardrobePanel, "Wardrobe");
+    }
+
+    // ============================================================
+    // GARAGE
+    // ============================================================
+
+    public void OpenGarage()
+    {
+        Debug.Log(
+            "[MainMenuController] OpenGarage() START.",
+            this
+        );
+
+        ResolveGarageUI();
+
+        if (!OpenPanel(garagePanel, "Garage"))
+            return;
+
+        if (garageUI == null)
+        {
+            Debug.LogError(
+                "[MainMenuController] GARAGE PANEL đã mở nhưng " +
+                "không tìm thấy MainMenuGarageUI.",
+                this
+            );
+
+            return;
+        }
+
+        Debug.Log(
+            "[MainMenuController] GARAGE -> GỌI MainMenuGarageUI.Open()",
+            garageUI
+        );
+
+        garageUI.Open();
+
+        Debug.Log(
+            "[MainMenuController] OpenGarage() COMPLETE.",
+            this
+        );
+    }
+
+    public void CloseGarage()
+    {
+        ClosePanel(garagePanel, "Garage");
+    }
+
+    // ============================================================
+    // UPGRADE
+    // ============================================================
+
+    public void OpenUpgrade()
+    {
+        OpenPanel(upgradePanel, "Upgrade");
+    }
+
+    public void CloseUpgrade()
+    {
+        ClosePanel(upgradePanel, "Upgrade");
+    }
 
     // ============================================================
     // MISSION
@@ -349,35 +550,13 @@ public class MainMenuController : MonoBehaviour
 
     public void OpenMission()
     {
-        if (missionPanel == null)
-        {
-            Debug.LogError(
-                "[MainMenuController] Chưa gán MissionPanel.",
-                this
-            );
-
-            return;
-        }
-
-        missionPanel.SetActive(true);
+        OpenPanel(missionPanel, "Mission");
     }
-
 
     public void CloseMission()
     {
-        if (missionPanel == null)
-        {
-            Debug.LogError(
-                "[MainMenuController] Chưa gán MissionPanel.",
-                this
-            );
-
-            return;
-        }
-
-        missionPanel.SetActive(false);
+        ClosePanel(missionPanel, "Mission");
     }
-
 
     public void ToggleMission()
     {
@@ -391,11 +570,96 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        missionPanel.SetActive(
-            !missionPanel.activeSelf
+        if (missionPanel.activeSelf)
+            CloseMission();
+        else
+            OpenMission();
+    }
+
+    // ============================================================
+    // PANEL / OVERLAY CORE
+    // ============================================================
+
+    private bool OpenPanel(
+        GameObject targetPanel,
+        string panelName)
+    {
+        if (targetPanel == null)
+        {
+            Debug.LogError(
+                $"[MainMenuController] {panelName}Panel chưa được gán.",
+                this
+            );
+
+            return false;
+        }
+
+        if (mainMenuScreen != null &&
+            !mainMenuScreen.activeSelf)
+        {
+            mainMenuScreen.SetActive(true);
+        }
+
+        CloseAllPanels();
+
+        targetPanel.SetActive(true);
+
+        Debug.Log(
+            $"[MainMenuController] OPEN OVERLAY -> {panelName} | " +
+            $"PanelActive={targetPanel.activeSelf} | " +
+            $"MainMenuActive={(mainMenuScreen != null && mainMenuScreen.activeSelf)}",
+            this
+        );
+
+        return true;
+    }
+
+    private void ClosePanel(
+        GameObject panel,
+        string panelName)
+    {
+        if (panel == null)
+        {
+            Debug.LogError(
+                $"[MainMenuController] {panelName}Panel chưa được gán.",
+                this
+            );
+
+            return;
+        }
+
+        panel.SetActive(false);
+
+        if (mainMenuScreen != null &&
+            !mainMenuScreen.activeSelf)
+        {
+            mainMenuScreen.SetActive(true);
+        }
+
+        Debug.Log(
+            $"[MainMenuController] CLOSE OVERLAY -> {panelName} | " +
+            "MainMenuScreen vẫn ACTIVE",
+            this
         );
     }
 
+    private void CloseAllPanels()
+    {
+        if (shopPanel != null)
+            shopPanel.SetActive(false);
+
+        if (wardrobePanel != null)
+            wardrobePanel.SetActive(false);
+
+        if (garagePanel != null)
+            garagePanel.SetActive(false);
+
+        if (upgradePanel != null)
+            upgradePanel.SetActive(false);
+
+        if (missionPanel != null)
+            missionPanel.SetActive(false);
+    }
 
     // ============================================================
     // CHARACTER PROFILE
@@ -406,10 +670,8 @@ public class MainMenuController : MonoBehaviour
         if (CharacterProfileUI.Instance == null)
         {
             Debug.LogError(
-                "[MainMenuController] " +
-                "Không tìm thấy CharacterProfileUI. " +
-                "Kiểm tra CharacterProfileCanvas đã có component " +
-                "CharacterProfileUI chưa.",
+                "[MainMenuController] Không tìm thấy CharacterProfileUI. " +
+                "Kiểm tra CharacterProfileCanvas đã có component CharacterProfileUI chưa.",
                 this
             );
 
@@ -419,14 +681,12 @@ public class MainMenuController : MonoBehaviour
         CharacterProfileUI.Instance.Open();
     }
 
-
     public void CloseCharacterProfile()
     {
         if (CharacterProfileUI.Instance == null)
         {
             Debug.LogError(
-                "[MainMenuController] " +
-                "Không tìm thấy CharacterProfileUI.",
+                "[MainMenuController] Không tìm thấy CharacterProfileUI.",
                 this
             );
 
@@ -436,14 +696,12 @@ public class MainMenuController : MonoBehaviour
         CharacterProfileUI.Instance.Close();
     }
 
-
     public void ToggleCharacterProfile()
     {
         if (CharacterProfileUI.Instance == null)
         {
             Debug.LogError(
-                "[MainMenuController] " +
-                "Không tìm thấy CharacterProfileUI.",
+                "[MainMenuController] Không tìm thấy CharacterProfileUI.",
                 this
             );
 
@@ -453,7 +711,6 @@ public class MainMenuController : MonoBehaviour
         CharacterProfileUI.Instance.Toggle();
     }
 
-
     // ============================================================
     // SETTINGS
     // ============================================================
@@ -461,10 +718,10 @@ public class MainMenuController : MonoBehaviour
     public void Settings()
     {
         Debug.Log(
-            "Settings chưa được triển khai."
+            "Settings được quản lý bởi hệ thống riêng.",
+            this
         );
     }
-
 
     // ============================================================
     // HOW TO PLAY
@@ -473,10 +730,10 @@ public class MainMenuController : MonoBehaviour
     public void HowToPlay()
     {
         Debug.Log(
-            "How To Play chưa được triển khai."
+            "How To Play chưa được triển khai.",
+            this
         );
     }
-
 
     // ============================================================
     // LOGOUT
@@ -487,8 +744,7 @@ public class MainMenuController : MonoBehaviour
         if (isLoggingOut)
         {
             Debug.Log(
-                "[MainMenuController] " +
-                "Logout đã được thực hiện."
+                "[MainMenuController] Logout đã được thực hiện."
             );
 
             return;
@@ -497,8 +753,17 @@ public class MainMenuController : MonoBehaviour
         if (isStartingGame)
         {
             Debug.Log(
-                "[MainMenuController] " +
-                "Không thể Logout: đang khởi động Gameplay.",
+                "[MainMenuController] Không thể Logout: đang khởi động Gameplay.",
+                this
+            );
+
+            return;
+        }
+
+        if (isExitingGame)
+        {
+            Debug.Log(
+                "[MainMenuController] Không thể Logout: game đang thoát.",
                 this
             );
 
@@ -509,83 +774,55 @@ public class MainMenuController : MonoBehaviour
 
         Time.timeScale = 1f;
 
-
         Debug.Log(
             "[MainMenuController] ĐANG ĐĂNG XUẤT...",
             this
         );
 
-
-        // --------------------------------------------------------
-        // FIREBASE SIGN OUT
-        // --------------------------------------------------------
-
-        if (
-            FirebaseAuthManager.Instance != null &&
-            FirebaseAuthManager.Instance.Auth != null
-        )
+        if (FirebaseAuthManager.Instance != null &&
+            FirebaseAuthManager.Instance.Auth != null)
         {
             FirebaseAuthManager.Instance.Auth.SignOut();
 
             Debug.Log(
-                "[MainMenuController] " +
-                "Firebase SignOut thành công.",
+                "[MainMenuController] Firebase SignOut thành công.",
                 this
             );
         }
         else
         {
             Debug.LogWarning(
-                "[MainMenuController] " +
-                "Không tìm thấy FirebaseAuthManager.",
+                "[MainMenuController] Không tìm thấy FirebaseAuthManager.",
                 this
             );
         }
 
-
-        // --------------------------------------------------------
-        // CLEAR CURRENT PLAYER DATA
-        // --------------------------------------------------------
-
-        if (
-            FirestorePlayerDataManager.Instance != null
-        )
+        if (FirestorePlayerDataManager.Instance != null)
         {
-            FirestorePlayerDataManager.Instance
-                .ClearCurrentPlayerData();
+            FirestorePlayerDataManager.Instance.ClearCurrentPlayerData();
 
             Debug.Log(
-                "[MainMenuController] " +
-                "CurrentPlayerData đã được clear.",
+                "[MainMenuController] CurrentPlayerData đã được clear.",
                 this
             );
         }
 
-
-        // --------------------------------------------------------
-        // CHECK LOGIN SCENE
-        // --------------------------------------------------------
-
-        if (string.IsNullOrWhiteSpace(
-                loginSceneName))
+        if (string.IsNullOrWhiteSpace(loginSceneName))
         {
             isLoggingOut = false;
 
             Debug.LogError(
-                "[MainMenuController] " +
-                "Login Scene Name đang trống.",
+                "[MainMenuController] Login Scene Name đang trống.",
                 this
             );
 
             return;
         }
 
-
         bool canLoad =
             Application.CanStreamedLevelBeLoaded(
                 loginSceneName
             );
-
 
         Debug.Log(
             "[MainMenuController] " +
@@ -594,13 +831,12 @@ public class MainMenuController : MonoBehaviour
             this
         );
 
-
         if (!canLoad)
         {
             isLoggingOut = false;
 
             Debug.LogError(
-                $"[MainMenuController] " +
+                "[MainMenuController] " +
                 $"Không thể load Scene '{loginSceneName}'. " +
                 "Kiểm tra Build Profiles.",
                 this
@@ -609,19 +845,73 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-
-        // --------------------------------------------------------
-        // LOAD LOGIN
-        // --------------------------------------------------------
-
         Debug.Log(
-            "[MainMenuController] " +
-            "LOGOUT SUCCESS → LOGIN",
+            "[MainMenuController] LOGOUT SUCCESS → LOGIN",
             this
         );
 
-        SceneManager.LoadScene(
-            loginSceneName
+        SceneManager.LoadScene(loginSceneName);
+    }
+
+    // ============================================================
+    // EXIT GAME
+    // ============================================================
+
+    public void ExitGame()
+    {
+        if (isExitingGame)
+        {
+            Debug.Log(
+                "[MainMenuController] ExitGame() bị bỏ qua: " +
+                "game đang trong quá trình thoát.",
+                this
+            );
+
+            return;
+        }
+
+        if (isStartingGame)
+        {
+            Debug.Log(
+                "[MainMenuController] Không thể thoát game: " +
+                "đang khởi động Gameplay.",
+                this
+            );
+
+            return;
+        }
+
+        if (isLoggingOut)
+        {
+            Debug.Log(
+                "[MainMenuController] Không thể thoát game: " +
+                "đang đăng xuất.",
+                this
+            );
+
+            return;
+        }
+
+        isExitingGame = true;
+
+        Time.timeScale = 1f;
+
+        Debug.Log(
+            "[MainMenuController] EXIT GAME -> " +
+            "Đang đóng ứng dụng.",
+            this
         );
+
+#if UNITY_EDITOR
+        // --------------------------------------------------------
+        // UNITY EDITOR
+        // --------------------------------------------------------
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        // --------------------------------------------------------
+        // WINDOWS / ANDROID / BUILD
+        // --------------------------------------------------------
+        Application.Quit();
+#endif
     }
 }
