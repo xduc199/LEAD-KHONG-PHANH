@@ -109,7 +109,6 @@ To create a local build, open **File → Build Profiles** (or the equivalent Bui
 
 **In active development.** The core run, road streaming, traffic, collision, and run-state systems are present in project code. Items, progression, inventory/shop, missions, special traffic, and online flows have partial implementations whose full runtime behavior is unverified. No public release, performance benchmark, or successful platform build is claimed.
 
-For supporting source research, see [the source audit](LEAD_KHONG_PHANH_SOURCE_AUDIT.md), [technical project dossier](LEAD_KHONG_PHANH_TECHNICAL_PROJECT_DOSSIER.md), and [evidence index](LEAD_KHONG_PHANH_EVIDENCE_INDEX.md). These documents are in Vietnamese.
 
 ## Team
 
