@@ -1,0 +1,15 @@
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\bin\Release\net10.0\FirebaseConfigAudit.exe
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\bin\Release\net10.0\FirebaseConfigAudit.deps.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\bin\Release\net10.0\FirebaseConfigAudit.runtimeconfig.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\bin\Release\net10.0\FirebaseConfigAudit.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\bin\Release\net10.0\FirebaseConfigAudit.pdb
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.GeneratedMSBuildEditorConfig.editorconfig
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.AssemblyInfoInputs.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.AssemblyInfo.cs
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.csproj.CoreCompileInputs.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.sourcelink.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\refint\FirebaseConfigAudit.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.pdb
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\FirebaseConfigAudit.genruntimeconfig.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\FirebaseConfigAudit\obj\Release\net10.0\ref\FirebaseConfigAudit.dll

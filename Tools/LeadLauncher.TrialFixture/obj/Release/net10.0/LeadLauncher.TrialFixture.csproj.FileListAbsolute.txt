@@ -1,0 +1,15 @@
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\bin\Release\net10.0\LEADKhongPhanh.exe
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\bin\Release\net10.0\LEADKhongPhanh.deps.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\bin\Release\net10.0\LEADKhongPhanh.runtimeconfig.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\bin\Release\net10.0\LEADKhongPhanh.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\bin\Release\net10.0\LEADKhongPhanh.pdb
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.GeneratedMSBuildEditorConfig.editorconfig
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.AssemblyInfoInputs.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.AssemblyInfo.cs
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.csproj.CoreCompileInputs.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.sourcelink.json
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LEADKhongPhanh.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\refint\LEADKhongPhanh.dll
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LEADKhongPhanh.pdb
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\LeadLauncher.TrialFixture.genruntimeconfig.cache
+D:\Study\ĐỒ ÁN\laptrinhgame\LEAD-KHONG-PHANH\Tools\LeadLauncher.TrialFixture\obj\Release\net10.0\ref\LEADKhongPhanh.dll
